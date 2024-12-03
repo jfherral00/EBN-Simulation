@@ -1,0 +1,134 @@
+#Simulation configuration file
+
+name: Red de pruebas
+link_fidel_rounds: 100 #Number of fidelity measures to estimate link fidelity
+path_fidel_rounds: 100 #Default number of measures to perform when estimating E2E path fidelity
+epr_pair: 'PHI_PLUS' #Allowed values are PHI_PLUS or PSI_PLUS
+simulation_duration: 100000000 #Duration of application simulation phase
+
+nodes:
+  - switch1: #name of switch
+      type: switch
+      num_memories: 34
+      gate_duration: 0
+  - node1: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node2:
+      type: endNode
+      gate_duration: 0
+  - node3: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node4: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node5: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node6: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node7: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node8: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node9: #name of endNode
+      type: endNode
+      gate_duration: 0
+  - node10: #name of endNode
+      type: endNode
+      gate_duration: 0
+links:
+  - nodeswitch1: #name of link
+      end1: node1
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch2: #name of link
+      end1: node2
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch3: #name of link
+      end1: node3
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch4: #name of link
+      end1: node4
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch5: #name of link
+      end1: node5
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch6: #name of link
+      end1: node6
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch7: #name of link
+      end1: node7
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch8: #name of link
+      end1: node8
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch9: #name of link
+      end1: node9
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+  - nodeswitch10: #name of link
+      end1: node10
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+
+requests:
+  - request1: #name of request
+      origin: node1
+      destination: node2
+      minfidelity: 0.85
+      maxtime: 16000000000 # nanoseconds
+      path_fidel_rounds: 100
+      application: Capacity
+

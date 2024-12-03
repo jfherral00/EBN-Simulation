@@ -1,0 +1,53 @@
+#Simulation configuration file
+
+name: Red de pruebas
+link_fidel_rounds: 1000 #Number of fidelity measures to estimate link fidelity
+path_fidel_rounds: 100 #Default number of measures to perform when estimating E2E path fidelity
+epr_pair: 'PHI_PLUS' #Allowed values are PHI_PLUS or PSI_PLUS
+simulation_duration: 1000000000 #Duration of application simulation phase
+
+nodes:
+  - switch1: #name of switch
+      type: switch
+      num_memories: 12
+  - node1: #name of endNode
+      type: endNode
+      teleport_queue_technology: Quantum
+      teleport_queue_size: 9
+  - node2:
+      type: endNode
+      teleport_queue_technology: Quantum
+      teleport_queue_size: 9
+
+links:
+  - nodeswitch1: #name of link
+      end1: node1
+      end2: switch1
+      distance: 85
+      source_fidelity_sq: 1
+      source_delay: 10
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+      #dephase_qchannel_rate: 500
+  - nodeswitch2:
+      end1: node2
+      end2: switch1
+      distance: 85
+      source_fidelity_sq: 1
+      source_delay: 10
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_noise_model: FibreDepolGaussModel
+      #dephase_qchannel_rate: 500
+
+requests:
+  - request1: #name of request
+      origin: node1
+      destination: node2
+      minfidelity: 0.0
+      maxtime: 16000000000 # nanoseconds
+      path_fidel_rounds: 100
+      teleport: [[1,1]] #Lista de (alpha, beta). alpha|0> + beta|1> Estados a teleportar
+      application: LogicalTeleportation
+       

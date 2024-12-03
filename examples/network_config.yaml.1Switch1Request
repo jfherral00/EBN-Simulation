@@ -1,0 +1,52 @@
+#Simulation configuration file
+
+name: Red de pruebas
+link_fidel_rounds: 100 #Number of fidelity measures to estimate link fidelity
+path_fidel_rounds: 100 #Default number of measures to perform when estimating E2E path fidelity
+epr_pair: 'PSI_PLUS' #Allowed values are PHI_PLUS or PSI_PLUS
+simulation_duration: 10000000 #Duration of application simulation phase
+
+nodes:
+  - switch1: #name of switch
+      type: switch
+      num_memories: 34
+      gate_duration: 0
+  - node1: #name of endNode
+      type: endNode
+      gate_duration: 30
+  - node2:
+      type: endNode
+      gate_duration: 30
+
+links:
+  - nodeswitch1: #name of link
+      end1: node1
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      source_delay: 100
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_loss_model: FibreLossModel
+      p_loss_init: 0.7
+      p_loss_length: 0
+  - nodeswitch2: #name of link
+      end1: node2
+      end2: switch1
+      distance: 5
+      source_fidelity_sq: 1
+      source_delay: 100
+      photon_speed_fibre: 200e3
+      classical_delay_model: FibreDelayModel
+      qchannel_loss_model: FibreLossModel
+      p_loss_init: 0.7
+      p_loss_length: 0
+
+requests:
+  - request1: #name of request
+      origin: node1
+      destination: node2
+      minfidelity: 0.75
+      maxtime: 1600000000000 # nanoseconds
+      #path_fidel_rounds: 100
+      application: Capacity
