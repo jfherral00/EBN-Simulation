@@ -1,0 +1,6 @@
+netsquid>=1.0.7
+pandas=1.2.0
+pygraphbiz>=1.12
+pylatex>=1.4.2
+networkx>=3.2.1
+matplotlib>=3.8.4
