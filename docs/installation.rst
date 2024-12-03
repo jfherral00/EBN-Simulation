@@ -1,6 +1,6 @@
 Installation
 ------------
-Simulator is shipped as source code files that can be executed with Python interpreter.
+Simulator is shipped as source code files that can be executed with a Python interpreter.
 For example, in Ubuntu:
 .. code-block:: shell
 	python3 main.py
@@ -18,7 +18,7 @@ Software requirements
  - texlive-fonts-recommended
  - texlivefonts-extra
  - texlive.latex-extra
-- python libraries: 
+- Python libraries: 
  - netsquid 1.0.7 or later
  - pandas 1.2.0
  - pygraphbiz 1.12 or later
