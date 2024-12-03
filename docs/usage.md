@@ -13,19 +13,18 @@ A directory named **output** must be created before execution.
 Execution modes
 ----------------
 Once executed, the program will ask for the execution mode
-.. code-block:: shell
-   Do you want to perform fixed parameter simulation or evolution? (F: Fixed, E: Evolution):
+``shell
+Do you want to perform fixed parameter simulation or evolution? (F: Fixed, E: Evolution):
+```
 
 Values can be:
-
 - Fixed: Simulator will get the network topology and all component parameters from the configuration file.
 - Evolution: Topology will be read from the configuration file. All parameters are loaded from the file exept for one of them. Several simulations will be executed, each one of them with a different value of the specified parameter.
 
 In Fixed mode execution will start and results stored in the **output** directory.
 
 In Evolution mode, several additional parameters are requested:
-.. code-block:: shell
-
+```shell
    Do you want to perform fixed parameter simulation or evolution? (F: Fixed, E: Evolution): E
    Enter object (nodes/links/requests). Parameter will be set in ALL instances: nodes
    Enter property: gate_duration
@@ -33,6 +32,7 @@ In Evolution mode, several additional parameters are requested:
    Enter maximum value: 25000
    Enter number of steps (minimum 2): 10
    Do you want data points in (L)og scale or equally (S)paced? (L/S)S
+``` 
 
 - object: the structure the parameter is associated with: nodes, links or demands.
 - property: the name of the property that will be varying.
@@ -44,7 +44,6 @@ In Evolution mode, several additional parameters are requested:
 Results
 ---------------
 Results will be printed in console and some files are stored in the **output** directory:
-
 - definitionfile_<YYYY-MM-DD>_<HH:mm:ss>.txt: yaml file that was used for the simulation. Date and time are appended.
 - results_<YYYY-MM-DD>_<HH:mm:ss>.csv: file in .csv format with the resulting metrics of the simulation. Date and time are appended.
 - routing_<YYYY-MM-DD>_<HH:mm:ss>.txt: csv file with the routing metrics used by the network hipervisor in order to calculate paths. Date and time are appended.
