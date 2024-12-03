@@ -6,5 +6,5 @@ For example, in Ubuntu:
 	python3 main.py
 
 
-Important: a directory named output must exist in the path from where it is executed, as results will be stored inside that location.
+Important: a directory named **output** must exist in the path from where it is executed, as results will be stored inside that location.
 
