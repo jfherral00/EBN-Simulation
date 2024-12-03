@@ -16,6 +16,7 @@ Once executed, the program will ask for the execution mode
    Do you want to perform fixed parameter simulation or evolution? (F: Fixed, E: Evolution):
 
 Values can be:
--Fixed: Simulator will get the network topology and all component parameters from the configuration file.
--Evolution: Topology will be read from the configuration file. All parameters are loaded from the file exept for one of them. Several simulations will be executed, each one of them with a different value of the specified parameter.
+
+- Fixed: Simulator will get the network topology and all component parameters from the configuration file.
+- Evolution: Topology will be read from the configuration file. All parameters are loaded from the file exept for one of them. Several simulations will be executed, each one of them with a different value of the specified parameter.
 
