@@ -24,6 +24,7 @@ In Fixed mode execution will start and results stored in the **output** director
 
 In Evolution mode, several additional parameters are requested:
 .. code-block:: shell
+
    Do you want to perform fixed parameter simulation or evolution? (F: Fixed, E: Evolution): E
    Enter object (nodes/links/requests). Parameter will be set in ALL instances: nodes
    Enter property: gate_duration
