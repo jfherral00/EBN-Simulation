@@ -13,6 +13,15 @@ Software requirements
 - Operating System: Ubuntu 20.04 or later
 - Packages:  
  - graphviz
- - libgraphviz-dev, texlive-latex-base, texlive-fonts-recommended, texlivefonts-extra, texlive.latex-extra
+ - libgraphviz-dev
+ - texlive-latex-base
+ - texlive-fonts-recommended
+ - texlivefonts-extra
+ - texlive.latex-extra
 - python libraries: 
  - netsquid 1.0.7 or later
+ - pandas 1.2.0
+ - pygraphbiz 1.12 or later
+ - pylatex 1.4.2 or later
+ - networkx 3.2.1 or later
+ - matplotlib 3.8.4 or later
