@@ -13,7 +13,7 @@ A directory named **output** must be created before execution.
 Execution modes
 ----------------
 Once executed, the program will ask for the execution mode
-``shell
+```shell
 Do you want to perform fixed parameter simulation or evolution? (F: Fixed, E: Evolution):
 ```
 
