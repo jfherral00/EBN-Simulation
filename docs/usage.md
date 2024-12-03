@@ -5,9 +5,7 @@ Example:
 .. code-block:: shell
    python3 main.py
 
-Network topology and parameters must be placed in a file named **network_config.yaml** in the same directory. Some examples are documented in examples_. 
-
-.. [examples](examples)
+Network topology and parameters must be placed in a file named **network_config.yaml** in the same directory. Some examples are documented in [examples](../examples/) directory.
 
 A directory named **output** must be created before execution.
 
