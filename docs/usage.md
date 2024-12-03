@@ -47,4 +47,5 @@ Results will be printed in console and some files are stored in the **output** d
 - definitionfile_<YYYY-MM-DD>_<HH:mm:ss>.txt: yaml file that was used for the simulation. Date and time are appended.
 - results_<YYYY-MM-DD>_<HH:mm:ss>.csv: file in .csv format with the resulting metrics of the simulation. Date and time are appended.
 - routing_<YYYY-MM-DD>_<HH:mm:ss>.txt: csv file with the routing metrics used by the network hipervisor in order to calculate paths. Date and time are appended.
--report.tex and report.pdf: report in PDF and latex format summarizing the simulation. If execution mode was *Evolution* graphs will be included.
+- report.tex and report.pdf: report in PDF and latex format summarizing the simulation. If execution mode was *Evolution* graphs will be included.
+
