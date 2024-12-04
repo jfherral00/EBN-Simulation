@@ -39,13 +39,13 @@ In Evolution mode, several additional parameters are requested:
 - minimum value: start value of the property.
 - maximum value: end value.
 - number of steps: the number of simulations that will be run. Each simulation will be executed with a parameter value ranging from the start value to the maximum one.
-- data point scale: wether the values will be generated linearly or in a logarithmic scale.
+- data point scale: whether the values will be generated linearly or in a logarithmic scale.
 
 Results
 ---------------
 Results will be printed in console and some files are stored in the **output** directory:
 - definitionfile_<YYYY-MM-DD>_<HH:mm:ss>.txt: yaml file that was used for the simulation. Date and time are appended.
-- results_<YYYY-MM-DD>_<HH:mm:ss>.csv: file in .csv format with the resulting metrics of the simulation. Date and time are appended.
+- results\_\<YYYY-MM-DD\>_\<HH-mm-ss\>.csv: file in .csv format with the resulting metrics of the simulation. Date and time are appended.
 - routing_<YYYY-MM-DD>_<HH:mm:ss>.txt: csv file with the routing metrics used by the network hipervisor in order to calculate paths. Date and time are appended.
 - report.tex and report.pdf: report in PDF and latex format summarizing the simulation. If execution mode was *Evolution* graphs will be included.
 
