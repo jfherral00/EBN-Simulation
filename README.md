@@ -1,10 +1,9 @@
 # EDNQuantumSimulator
-Simulator for an entanglement distribution quantum newtork
-
+Simulation of entanglement-based quantum networks: entanglement generation, swapping, purification and quantum applications.
 
 Description
 -------------------
-Simulation of entanglement-based quantum networks: entanglement generation, swapping, purification and quantum applications. Built on top of NetSquid framework.
+Simulation of an entanglement distribution based quantum network with configurable topology. Built on top of NetSquid framework.
 
 Documentation
 -----------------
