@@ -10,7 +10,7 @@ from protocols import RouteProtocol
 
 class LinkFidelityProtocol(LocalProtocol):
     '''
-    TODO: Document constructor properties
+    Implements the protocol that will measure fidelity of a link between two nodes    
     '''
             
     def __init__(self, networkmanager, origin, dest, link, qsource_index, num_runs=100, name=None):
@@ -43,9 +43,6 @@ class LinkFidelityProtocol(LocalProtocol):
         # We need to ad a little delay so that no false timeouts appear
         self._delay += 100
         
-        #TODO: Delete these lines if time calculation is correct
-        #To make sure we measure, we set 4 times the expected value
-        #self._delay = 4 * 1e9 * float(networkmanager.get_config('links',link,'distance'))/float(networkmanager.get_config('links',link,'photon_speed_fibre'))
 
     def run(self):
         #Signal Qsource to start. Must trigger correct source

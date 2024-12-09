@@ -60,7 +60,6 @@ class Switch(Node):
 
 class EndNode(Node):
     def __init__(self, name, queue_size, qmemory):
-        #TODO: Change queue to quantum memory queue?
         self._state_transmit_queue = []
         self._mem_transmit_queue = []
         self._queue_size = queue_size
@@ -93,7 +92,6 @@ class EndNode(Node):
                 if self.qmemory.num_positions > 4: #We are using quantum memory for storage
                     # Replace memory position with oldest qubit with new one
                     mempos = self._mem_transmit_queue.pop(0)
-                    #TODO: Check if we must insert validation of qprocessor being used
                     self.qmemory.put(qubit, mempos, replace = True)
                     self._mem_transmit_queue.append(mempos)
 
