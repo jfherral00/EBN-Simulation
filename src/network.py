@@ -191,12 +191,12 @@ class NetworkManager():
         Output:
             - value of required attribute
         '''
-        if mode not in ['name','simulation_duration','epr_pair','link_fidel_rounds','path_fidel_rounds','nodes','links','requests']:
+        if mode not in ['name','simulation_duration','epr_pair','link_fidel_rounds','path_fidel_rounds','loss_strategy','nodes','links','requests']:
             raise ValueError('Unsupported mode')
         else:
             elements = self._config[mode] 
             #Querying for a global property
-            if mode in ['name','epr_pair','simulation_duration','link_fidel_rounds','path_fidel_rounds']: 
+            if mode in ['name','epr_pair','simulation_duration','link_fidel_rounds','path_fidel_rounds','loss_strategy']: 
                 return (elements)
             
             #Querying for an element type

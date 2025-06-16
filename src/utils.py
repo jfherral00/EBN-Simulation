@@ -296,9 +296,17 @@ def validate_conf(config):
         if 'name' not in config.keys() or 'link_fidel_rounds' not in config.keys() \
             or 'path_fidel_rounds' not in config.keys() or 'nodes' not in config.keys() \
                 or 'links' not in config.keys() or 'requests' not in config.keys() \
-                    or 'epr_pair' not in config.keys() or 'simulation_duration' not in config.keys(): 
+                    or 'epr_pair' not in config.keys() or 'simulation_duration' not in config.keys() \
+                        or 'loss_strategy' not in config.keys(): 
             raise ValueError('Invalid configuration file, check global parameters')
 
+        if config['loss_strategy'] not in ['link','e2e']:
+            raise ValueError('Invalid value for loss_strategy, must be link or e2e')
+        
+        if config['epr_pair'] not in ['PHI_PLUS','PSI_PLUS']:
+            raise ValueError('Invalid value for epr_pair, must be PHI_PLUS or PSI_PLUS')
+        
+        
         #Check link sintax
         links = config['links']
             

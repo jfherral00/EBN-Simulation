@@ -34,6 +34,7 @@ class RouteProtocol(LocalProtocol):
         - start_expression: event expression that will trigger the EPR generation
         - phase: 'routing' or 'application'
         - purif_rounds: number of needed purification rounds
+        - loss_strategy: 'link' or 'e2e'
         - name: name of the protocol
     '''
 
@@ -42,6 +43,7 @@ class RouteProtocol(LocalProtocol):
         self._networkmanager = networkmanager
         self.start_expression = start_expression
         self._purif_rounds = purif_rounds
+        self._loss_strategy = self._networkmanager.get_config('loss_strategy','loss_strategy')
         name = name if name else f"RouteProtocol_{path['request']}"
         super().__init__(nodes=networkmanager.network.nodes, name=name)
         first_link = self._path['comms'][0]['links'][0]
@@ -61,14 +63,77 @@ class RouteProtocol(LocalProtocol):
         self._restart_signal = 'RESTART_CORRECT_PROTOCOL'
         self.add_signal(self._restart_signal)
 
+
+        #TODO #Instanciar protocolo de swap pasando el loss_Strategy y las distancias
+        if self._loss_strategy == 'e2e':    
+            # calculate total distance and delay, in order to set timer to detect lost qubit
+            # only used when loss_strategy is e2e
+            self._total_delay = 0
+            max_source_delay = 0
+            for comm in path['comms']:
+                link_name = comm['links'][0].split('-')[0]
+                #Add time corresponding to transmission
+                distance = float(networkmanager.get_config('links',link_name,'distance'))
+                photon_speed = float(networkmanager.get_config('links',link_name,'photon_speed_fibre'))
+                self._total_delay += 1e9 * distance / photon_speed
+                #Add time corresponding to qsource emission
+                emission_delay = float(networkmanager.get_config('links',link_name,'source_delay')) \
+                    if networkmanager.get_config('links',link_name,'source_delay') != 'NOT_FOUND' else 0
+                if emission_delay > max_source_delay:
+                    max_source_delay = emission_delay
+            self._total_delay += max_source_delay
+            
+            #We need to add some nanoseconds to timer, to discard false timeout positives
+            # when tomeout and correct transmission matches. If distances are short we 
+            # can receive a lost qubit signal when it is not correct
+            self._total_delay += 100
+            
+            #We should add time corresponging to Bell measurements in switches and X/Z in end node
+            max_swap_time = 0
+            correction_time = 0
+            for node in path['nodes'][1:]:
+                if networkmanager.get_config('nodes',node,'type') == 'switch':
+                    gate_duration = networkmanager.get_config('nodes',node,'gate_duration') \
+                        if networkmanager.get_config('nodes',node,'gate_duration') != 'NOT_FOUND' else 0
+                    gate_duration_CX = networkmanager.get_config('nodes',node,'gate_duration_CX') \
+                        if networkmanager.get_config('nodes',node,'gate_duration_CX') != 'NOT_FOUND' else gate_duration
+                    measurements_duration = networkmanager.get_config('nodes',node,'measurements_duration') \
+                        if networkmanager.get_config('nodes',node,'measurements_duration') != 'NOT_FOUND' else gate_duration
+                    if gate_duration + gate_duration_CX + measurements_duration > max_swap_time:
+                        max_swap_time = gate_duration + gate_duration_CX + measurements_duration
+                else:
+                    num_switches = len(path['nodes']) - 2
+                    gate_duration = networkmanager.get_config('nodes',node,'gate_duration') \
+                        if networkmanager.get_config('nodes',node,'gate_duration') != 'NOT_FOUND' else 0
+                    #Worse case: X and Z corrections to apply
+                    correction_time = 2 * gate_duration
+                    
+            self._total_delay += max_swap_time + correction_time 
+    
+            #When several requests are processed, we should also add time related to Bell measurements for those requests
+            if phase == 'application':
+                #Add 3% as margin for possible delays
+                self._total_delay += (len(networkmanager.get_paths()) -1) * (gate_duration + gate_duration_CX + measurements_duration) *1.03
+        else:
+            #If we are using link loss strategy, we do not need to calculate total delay
+            self._total_delay = 1000000000000
+            
+
         # preparation of entanglement swaping from second to the last-1
         for nodepos in range(1,len(path['nodes'])-1):
             node = path['nodes'][nodepos]
             link_left = path['comms'][nodepos-1]['links'][0]
             link_right = path['comms'][nodepos]['links'][0]
+
             mem_pos_left = networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
             mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
-            subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'])
+            if self._loss_strategy == 'e2e':
+                l_timeout = 1000
+                r_timeout = 1000
+            else:
+                l_timeout = 1000 #TODO
+                r_timeout = 1000 #TODO
+            subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'],loss_strategy=self._loss_strategy,l_timeout=l_timeout, r_timeout=r_timeout)
             self.add_subprotocol(subprotocol)
 
         # preparation of correct protocol in final node
@@ -81,54 +146,6 @@ class RouteProtocol(LocalProtocol):
         if purif_rounds > 0:
             #If protocol is being instanced with purification from the beggining we need to add second link protocols
             self._init_second_link_protocols('distil')
-
-        # calculate total distance and delay, in order to set timer to detect lost qubit
-        self._total_delay = 0
-        max_source_delay = 0
-        for comm in path['comms']:
-            link_name = comm['links'][0].split('-')[0]
-            #Add time corresponding to transmission
-            distance = float(networkmanager.get_config('links',link_name,'distance'))
-            photon_speed = float(networkmanager.get_config('links',link_name,'photon_speed_fibre'))
-            self._total_delay += 1e9 * distance / photon_speed
-            #Add time corresponding to qsource emission
-            emission_delay = float(networkmanager.get_config('links',link_name,'source_delay')) \
-                if networkmanager.get_config('links',link_name,'source_delay') != 'NOT_FOUND' else 0
-            if emission_delay > max_source_delay:
-                max_source_delay = emission_delay
-        self._total_delay += max_source_delay
-        
-        #We need to add some nanoseconds to timer, to discard false timeout positives
-        # when tomeout and correct transmission matches. If distances are short we 
-        # can receive a lost qubit signal when it is not correct
-        self._total_delay += 100
-        
-        #We should add time corresponging to Bell measurements in switches and X/Z in end node
-        max_swap_time = 0
-        correction_time = 0
-        for node in path['nodes'][1:]:
-            if networkmanager.get_config('nodes',node,'type') == 'switch':
-                gate_duration = networkmanager.get_config('nodes',node,'gate_duration') \
-                    if networkmanager.get_config('nodes',node,'gate_duration') != 'NOT_FOUND' else 0
-                gate_duration_CX = networkmanager.get_config('nodes',node,'gate_duration_CX') \
-                    if networkmanager.get_config('nodes',node,'gate_duration_CX') != 'NOT_FOUND' else gate_duration
-                measurements_duration = networkmanager.get_config('nodes',node,'measurements_duration') \
-                    if networkmanager.get_config('nodes',node,'measurements_duration') != 'NOT_FOUND' else gate_duration
-                if gate_duration + gate_duration_CX + measurements_duration > max_swap_time:
-                    max_swap_time = gate_duration + gate_duration_CX + measurements_duration
-            else:
-                num_switches = len(path['nodes']) - 2
-                gate_duration = networkmanager.get_config('nodes',node,'gate_duration') \
-                    if networkmanager.get_config('nodes',node,'gate_duration') != 'NOT_FOUND' else 0
-                #Worse case: X and Z corrections to apply
-                correction_time = 2 * gate_duration
-                
-        self._total_delay += max_swap_time + correction_time 
- 
-        #When several requests are processed, we should also add time related to Bell measurements for those requests
-        if phase == 'application':
-            #Add 3% as margin for possible delays
-            self._total_delay += (len(networkmanager.get_paths()) -1) * (gate_duration + gate_duration_CX + measurements_duration) *1.03
 
     def signal_sources(self,index=[1]):
         '''
@@ -179,7 +196,14 @@ class RouteProtocol(LocalProtocol):
             link_right = self._path['comms'][nodepos]['links'][1]
             mem_pos_left = self._networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
             mem_pos_right = self._networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
-            subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'])
+
+            if self._loss_strategy == 'e2e':
+                l_timeout = 1000
+                r_timeout = 1000
+            else:
+                l_timeout = 1000 #TODO
+                r_timeout = 1000 #TODO
+            subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'],loss_strategy=self._loss_strategy, l_timeout=l_timeout, r_timeout=r_timeout)
             self.add_subprotocol(subprotocol)
 
         #add Correction protocol for second instance of link
@@ -333,7 +357,7 @@ class SwapProtocol(NodeProtocol):
 
     """
 
-    def __init__(self, node, mem_left, mem_right, name, request):
+    def __init__(self, node, mem_left, mem_right, name, request, loss_strategy='e2e', l_timeout= 1000, r_timeout=1000):
         super().__init__(node, name)
 
         # get index of link
@@ -348,7 +372,6 @@ class SwapProtocol(NodeProtocol):
         self._program = QuantumProgram(num_qubits=2)
         q1, q2 = self._program.get_qubit_indices(num_qubits=2)
         self._program.apply(INSTR_MEASURE_BELL, [q1, q2], output_key="m", inplace=False)
-        
 
     def run(self):
         #Get instruction duration for timer. Minimum is 100

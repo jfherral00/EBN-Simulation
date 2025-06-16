@@ -92,7 +92,7 @@ class PathFidelityProtocol(LocalProtocol):
         self.add_signal(self._ent_request)
         
         ent_start_expression = self.await_signal(self, self._ent_request)
-        self.add_subprotocol(RouteProtocol(networkmanager,path,ent_start_expression,0))
+        self.add_subprotocol(RouteProtocol(networkmanager,path,ent_start_expression,'routing',0))
 
     def set_purif_rounds(self, purif_rounds):
         self._purif_rounds = purif_rounds
