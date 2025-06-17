@@ -63,8 +63,7 @@ class RouteProtocol(LocalProtocol):
         self._restart_signal = 'RESTART_CORRECT_PROTOCOL'
         self.add_signal(self._restart_signal)
 
-
-        #TODO #Instanciar protocolo de swap pasando el loss_Strategy y las distancias
+        #Swap protocol is different depending on the loss strategy
         if self._loss_strategy == 'e2e':    
             # calculate total distance and delay, in order to set timer to detect lost qubit
             # only used when loss_strategy is e2e
@@ -114,27 +113,56 @@ class RouteProtocol(LocalProtocol):
             if phase == 'application':
                 #Add 3% as margin for possible delays
                 self._total_delay += (len(networkmanager.get_paths()) -1) * (gate_duration + gate_duration_CX + measurements_duration) *1.03
-        else:
-            #If we are using link loss strategy, we do not need to calculate total delay
-            self._total_delay = 1000000000000
-            
 
-        # preparation of entanglement swaping from second to the last-1
-        for nodepos in range(1,len(path['nodes'])-1):
-            node = path['nodes'][nodepos]
-            link_left = path['comms'][nodepos-1]['links'][0]
-            link_right = path['comms'][nodepos]['links'][0]
+                    # preparation of entanglement swaping from second to the last-1
+            for nodepos in range(1,len(path['nodes'])-1):
+                node = path['nodes'][nodepos]
+                link_left = path['comms'][nodepos-1]['links'][0]
+                link_right = path['comms'][nodepos]['links'][0]
 
-            mem_pos_left = networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
-            mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
-            if self._loss_strategy == 'e2e':
-                l_timeout = 1000
-                r_timeout = 1000
-            else:
-                l_timeout = 1000 #TODO
-                r_timeout = 1000 #TODO
-            subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'],loss_strategy=self._loss_strategy,l_timeout=l_timeout, r_timeout=r_timeout)
-            self.add_subprotocol(subprotocol)
+                mem_pos_left = networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
+                mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
+
+                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'])
+                self.add_subprotocol(subprotocol)
+
+        else: #loss_strategy is 'link'
+            self._total_delay=10000000 #TODO: Borrar cuando estén las pérdidas en enlace
+            for nodepos in range(len(path['nodes'])):
+                #TODO: Add Swap in end nodes
+                node = path['nodes'][nodepos]
+                link_left = path['comms'][nodepos-1]['links'][0] if nodepos > 1 else None
+                link_right = path['comms'][nodepos]['links'][0] if nodepos < len(path['nodes']) - 1 else None
+
+                if link_left is not None:
+                    mem_pos_left = networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1]) 
+                    #if source is in this switch, then distance is 0; otherwise is the distance
+                    link_left_distance = networkmanager.get_config('links',link_left.split('-')[0],'distance')
+                    link_left_distance = 0 if path['comms'][nodepos-1]['source'] == node else float(link_left_distance)
+                    
+                    #Get photon speed in each of the links. With the speed calculate timeout
+                    photon_speed_left = float(networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
+                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) 
+                else:
+                    mem_pos_left = None
+                    link_left_distance = None
+                    l_timeout = None
+                
+                if link_right is not None:
+                    mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
+                    link_right_distance = networkmanager.get_config('links',link_right.split('-')[0],'distance')
+                    link_right_distance = 0 if path['comms'][nodepos]['source'] == node else float(link_right_distance)
+                    photon_speed_right = float(networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
+                    r_timeout = int(1e9 * link_right_distance / photon_speed_right)
+                else:
+                    mem_pos_right = None
+                    link_right_distance = None
+                    r_timeout = None
+                
+                ic(node,link_left_distance,link_right_distance)
+
+                subprotocol = SwapLossProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'],l_timeout=l_timeout, r_timeout=r_timeout)
+                self.add_subprotocol(subprotocol)
 
         # preparation of correct protocol in final node
         epr_state =  self._networkmanager.get_config('epr_pair','epr_pair')
@@ -190,21 +218,53 @@ class RouteProtocol(LocalProtocol):
         self._portleft_2 = self._networkmanager.network.get_node(self._path['nodes'][0]).qmemory.ports[f"qin{self._mem_posA_2}"]
 
         #add SwapProtocol in second instance of link
-        for nodepos in range(1,len(self._path['nodes'])-1):
-            node = self._path['nodes'][nodepos]
-            link_left = self._path['comms'][nodepos-1]['links'][1]
-            link_right = self._path['comms'][nodepos]['links'][1]
-            mem_pos_left = self._networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
-            mem_pos_right = self._networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
+        if self._loss_strategy == 'e2e':
+            for nodepos in range(1,len(self._path['nodes'])-1):
+                node = self._path['nodes'][nodepos]
+                link_left = self._path['comms'][nodepos-1]['links'][1]
+                link_right = self._path['comms'][nodepos]['links'][1]
+                mem_pos_left = self._networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
+                mem_pos_right = self._networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
 
-            if self._loss_strategy == 'e2e':
-                l_timeout = 1000
-                r_timeout = 1000
-            else:
-                l_timeout = 1000 #TODO
-                r_timeout = 1000 #TODO
-            subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'],loss_strategy=self._loss_strategy, l_timeout=l_timeout, r_timeout=r_timeout)
+            subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'])
             self.add_subprotocol(subprotocol)
+
+        else:# loss_strategy is 'link'
+            for nodepos in range(len(self._path['nodes'])):
+                node = self._path['nodes'][nodepos]
+                link_left = self._path['comms'][nodepos-1]['links'][0] if nodepos > 1 else None
+                link_right = self._path['comms'][nodepos]['links'][0] if nodepos < len(path['nodes']) - 1 else None
+
+                if link_left is not None:
+                    mem_pos_left = networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1]) 
+                    #if source is in this switch, then distance is 0; otherwise is the distance
+                    link_left_distance = networkmanager.get_config('links',link_left.split('-')[0],'distance')
+                    link_left_distance = 0 if self._path['comms'][nodepos-1]['source'] == node else float(link_left_distance)
+                    
+                    #Get photon speed in each of the links. With the speed calculate timeout
+                    photon_speed_left = float(networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
+                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) 
+                else:
+                    mem_pos_left = None
+                    link_left_distance = None
+                    l_timeout = None
+                
+                if link_right is not None:
+                    mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
+                    link_right_distance = networkmanager.get_config('links',link_right.split('-')[0],'distance')
+                    link_right_distance = 0 if self._path['comms'][nodepos]['source'] == node else float(link_right_distance)
+                    photon_speed_right = float(networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
+                    r_timeout = int(1e9 * link_right_distance / photon_speed_right)
+                else:
+                    mem_pos_right = None
+                    link_right_distance = None
+                    r_timeout = None
+                
+                ic(node,link_left_distance,link_right_distance)
+
+                subprotocol = SwapLossProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'],l_timeout=l_timeout, r_timeout=r_timeout)
+                self.add_subprotocol(subprotocol)
+
 
         #add Correction protocol for second instance of link
         epr_state = epr_state =  self._networkmanager.get_config('epr_pair','epr_pair')
@@ -410,6 +470,33 @@ class SwapProtocol(NodeProtocol):
             m, = self._program.output["m"]
             # Send result to right node on end
             self.node.ports[f"ccon_R_{self.node.name}_{self._request}_{self._index}"].tx_output(Message(m))
+ 
+class SwapLossProtocol(NodeProtocol):
+    """Perform Swap on a repeater node with a link level loss recovery strategy.
+    TODO: Implement loss strategy
+
+    Parameters
+    ----------
+    node : :class:`~netsquid.nodes.node.Node` or None, optional
+        Node this protocol runs on.
+    name : str
+        Name of this protocol.
+
+    """
+
+    def __init__(self, node, mem_left, mem_right, name, request, loss_strategy='e2e', l_timeout= 1000, r_timeout=1000):
+        super().__init__(node, name)
+
+    def run(self):
+        #Get instruction duration for timer. Minimum is 100
+        max_duration = 100
+        for inst in self.node.qmemory.get_physical_instructions():
+            if inst.duration > max_duration:
+                max_duration = inst.duration
+        timer_duration = max_duration*0.1 if max_duration > 1000 else 100
+
+        #while True:
+        #    pass
             
 class SwapCorrectProgram(QuantumProgram):
     """Quantum processor program that applies all swap corrections."""
