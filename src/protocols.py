@@ -131,7 +131,7 @@ class RouteProtocol(LocalProtocol):
             for nodepos in range(len(path['nodes'])):
                 #TODO: Add Swap in end nodes
                 node = path['nodes'][nodepos]
-                link_left = path['comms'][nodepos-1]['links'][0] if nodepos > 1 else None
+                link_left = path['comms'][nodepos-1]['links'][0] if nodepos > 0 else None
                 link_right = path['comms'][nodepos]['links'][0] if nodepos < len(path['nodes']) - 1 else None
 
                 if link_left is not None:
@@ -232,7 +232,7 @@ class RouteProtocol(LocalProtocol):
         else:# loss_strategy is 'link'
             for nodepos in range(len(self._path['nodes'])):
                 node = self._path['nodes'][nodepos]
-                link_left = self._path['comms'][nodepos-1]['links'][0] if nodepos > 1 else None
+                link_left = self._path['comms'][nodepos-1]['links'][0] if nodepos > 0 else None
                 link_right = self._path['comms'][nodepos]['links'][0] if nodepos < len(path['nodes']) - 1 else None
 
                 if link_left is not None:
@@ -414,10 +414,12 @@ class SwapProtocol(NodeProtocol):
         Node this protocol runs on.
     name : str
         Name of this protocol.
-
+    mem_left: first memory positions assigned for entanglement swapping
+    mem_right: second memory positions assigned for entanglement swapping
+    request: request id for the path that the entanglement swapping is being performed
     """
 
-    def __init__(self, node, mem_left, mem_right, name, request, loss_strategy='e2e', l_timeout= 1000, r_timeout=1000):
+    def __init__(self, node, mem_left, mem_right, name, request):
         super().__init__(node, name)
 
         # get index of link
@@ -481,10 +483,14 @@ class SwapLossProtocol(NodeProtocol):
         Node this protocol runs on.
     name : str
         Name of this protocol.
-
+    mem_left: first memory positions assigned for entanglement swapping
+    mem_right: second memory positions assigned for entanglement swapping
+    request: request id for the path that the entanglement swapping is being performed
+    l_timeout: timeout for left link (nanoseconds)
+    r_timeout: timeout for right link (nanoseconds)
     """
 
-    def __init__(self, node, mem_left, mem_right, name, request, loss_strategy='e2e', l_timeout= 1000, r_timeout=1000):
+    def __init__(self, node, mem_left, mem_right, name, request, l_timeout= 1000, r_timeout=1000):
         super().__init__(node, name)
 
     def run(self):
