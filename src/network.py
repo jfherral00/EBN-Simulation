@@ -450,6 +450,12 @@ class NetworkManager():
             for i in [1,2]:
                 conn = self.network.get_connection(nodeA, nodeB,f"cconn_{nodeA.name}_{nodeB.name}_{path['request']}_{i}")
                 self.network.remove_connection(conn)
+                
+                conn = self.network.get_connection(nodeA, nodeB,f"cconn_{nodeA.name}_{nodeB.name}_loss_{path['request']}_{i}")
+                self.network.remove_connection(conn)
+                
+                conn = self.network.get_connection(nodeB, nodeA,f"cconn_{nodeB.name}_{nodeA.name}_loss_{path['request']}_{i}")
+                self.network.remove_connection(conn)
                 #Unable to delete ports. Will remain unconnected
 
         #remove classical purification connection
@@ -522,7 +528,7 @@ class NetworkManager():
                     else: # In case other, we assume FibreDelayModel
                         classical_delay_model = FibreDelayModel(c=float(self.get_config('links',link[0],'photon_speed_fibre')))
 
-                    #Create classical connection. We create channels even if purification is not needed
+                    #Create classical connections for bell measurements. We create channels even if purification is not needed
                     for i in [1,2]:
                         cconn = ClassicalConnection(name=f"cconn_{shortest_path[nodepos]}_{shortest_path[nodepos+1]}_{request_name}_{i}", 
                                                     length=self.get_config('links',link[0],'distance'))
@@ -539,6 +545,35 @@ class NetworkManager():
                         if f"ccon_L_{path['nodes'][nodepos]}_{request_name}_{i}" in self.network.get_node(path['nodes'][nodepos]).ports:
                             self.network.get_node(path['nodes'][nodepos]).ports[f"ccon_L_{path['nodes'][nodepos]}_{request_name}_{i}"].bind_input_handler(self._handle_message,tag_meta=True)
 
+                    if self.get_config('loss_strategy','loss_strategy') == 'link':
+                        #In case 'link' is selected as loss strategy, create classical connections
+                        #Communication with next node
+                        for i in [1,2]:
+                            cconn = ClassicalConnection(name=f"cconn_{shortest_path[nodepos]}_{shortest_path[nodepos+1]}_loss_{request_name}_{i}", 
+                                                        length=self.get_config('links',link[0],'distance'))
+                            cconn.subcomponents['Channel_A2B'].models['delay_model'] = classical_delay_model
+
+                            port_name, port_r_name = self.network.add_connection(
+                                self.network.get_node(shortest_path[nodepos]), 
+                                self.network.get_node(shortest_path[nodepos+1]), 
+                                connection=cconn, label=f"cconn_{shortest_path[nodepos]}_{shortest_path[nodepos+1]}_loss_{request_name}_{i}",
+                                port_name_node1=f"ccon_R_{shortest_path[nodepos]}_{shortest_path[nodepos+1]}_loss_{request_name}_{i}", 
+                                port_name_node2=f"ccon_L_{shortest_path[nodepos]}_{shortest_path[nodepos+1]}_loss_{request_name}_{i}")
+
+                        #Communication with previous node
+                        for i in [1,2]:
+                            cconn = ClassicalConnection(name=f"cconn_{shortest_path[nodepos+1]}_{shortest_path[nodepos]}_loss_{request_name}_{i}", 
+                                                        length=self.get_config('links',link[0],'distance'))
+                            cconn.subcomponents['Channel_A2B'].models['delay_model'] = classical_delay_model
+
+                            port_name, port_r_name = self.network.add_connection(
+                                self.network.get_node(shortest_path[nodepos+1]), 
+                                self.network.get_node(shortest_path[nodepos]), 
+                                connection=cconn, label=f"cconn_{shortest_path[nodepos+1]}_{shortest_path[nodepos]}_loss_{request_name}_{i}",
+                                port_name_node1=f"ccon_L_{shortest_path[nodepos+1]}_{shortest_path[nodepos]}_loss_{request_name}_{i}", 
+                                port_name_node2=f"ccon_R_{shortest_path[nodepos+1]}_{shortest_path[nodepos]}_loss_{request_name}_{i}")
+
+                    
                 #Setup classical channel for purification
                 #calculate distance from first to last node
                 total_distance = 0

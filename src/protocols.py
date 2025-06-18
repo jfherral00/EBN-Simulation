@@ -129,7 +129,6 @@ class RouteProtocol(LocalProtocol):
         else: #loss_strategy is 'link'
             self._total_delay=10000000 #TODO: Borrar cuando estén las pérdidas en enlace
             for nodepos in range(len(path['nodes'])):
-                #TODO: Add Swap in end nodes
                 node = path['nodes'][nodepos]
                 link_left = path['comms'][nodepos-1]['links'][0] if nodepos > 0 else None
                 link_right = path['comms'][nodepos]['links'][0] if nodepos < len(path['nodes']) - 1 else None
@@ -159,10 +158,13 @@ class RouteProtocol(LocalProtocol):
                     link_right_distance = None
                     r_timeout = None
                 
-                ic(node,link_left_distance,link_right_distance)
+                ic(node,link_left_distance,link_right_distance)#TODO: DELETE This line
 
                 subprotocol = SwapLossProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'],l_timeout=l_timeout, r_timeout=r_timeout)
                 self.add_subprotocol(subprotocol)
+                
+        for connection in self._networkmanager.network.connections:  #TODO: REMOVE
+            ic(connection)      
 
         # preparation of correct protocol in final node
         epr_state =  self._networkmanager.get_config('epr_pair','epr_pair')
