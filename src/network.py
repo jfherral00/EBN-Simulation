@@ -171,6 +171,7 @@ class NetworkManager():
         self._create_network()
         self._measure_link_fidelity()
         self._calculate_paths()
+        ic('Network created')
 
     def get_info_report(self):
         '''
@@ -605,10 +606,10 @@ class NetworkManager():
                 #get measurements to do for average fidelity
                 fidel_rounds = request_props['path_fidel_rounds'] \
                     if 'path_fidel_rounds' in request_props.keys() else self._config['path_fidel_rounds']
- 
+
                 #Initially no purification
                 protocol = PathFidelityProtocol(self,path,fidel_rounds, purif_rounds) #We measure E2E fidelity accordingly to config file times
-                
+
                 while end_simul == False:
                     dc = dc_setup(protocol)
                     protocol.start()

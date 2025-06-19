@@ -45,6 +45,7 @@ class RouteProtocol(LocalProtocol):
         self._purif_rounds = purif_rounds
         self._loss_strategy = self._networkmanager.get_config('loss_strategy','loss_strategy')
         name = name if name else f"RouteProtocol_{path['request']}"
+
         super().__init__(nodes=networkmanager.network.nodes, name=name)
         first_link = self._path['comms'][0]['links'][0]
         last_link = self._path['comms'][-1]['links'][0]
@@ -114,7 +115,7 @@ class RouteProtocol(LocalProtocol):
                 #Add 3% as margin for possible delays
                 self._total_delay += (len(networkmanager.get_paths()) -1) * (gate_duration + gate_duration_CX + measurements_duration) *1.03
 
-                    # preparation of entanglement swaping from second to the last-1
+            # preparation of entanglement swaping from second to the last-1
             for nodepos in range(1,len(path['nodes'])-1):
                 node = path['nodes'][nodepos]
                 link_left = path['comms'][nodepos-1]['links'][0]
@@ -164,7 +165,7 @@ class RouteProtocol(LocalProtocol):
                 self.add_subprotocol(subprotocol)
                 
         for connection in self._networkmanager.network.connections:  #TODO: REMOVE
-            ic(connection)      
+            ic(connection)      #TODO: REMOVE
 
         # preparation of correct protocol in final node
         epr_state =  self._networkmanager.get_config('epr_pair','epr_pair')
@@ -177,21 +178,27 @@ class RouteProtocol(LocalProtocol):
             #If protocol is being instanced with purification from the beggining we need to add second link protocols
             self._init_second_link_protocols('distil')
 
-    def signal_sources(self,index=[1]):
+    def signal_sources(self,index=[1],link_to_trigger=None):
         '''
-        Signals all sources in the path in order to generate EPR
+        Signals sources:
+            - if link_to_trigger is None, then all sources in the path are signaled
+            - if link_to_trigger is provided, only the source in the link is triggered
+  
         Receives the index to trigger the generation. If none, only first instance will be triggered
         If index=[1,2] then both instances are signaled (purification)
         '''
         if index not in [[1],[2],[1,2]]:
             raise ValueError('Unsupported trigger generation')
-        for link in self._path['comms']:
-            trigger_node = self._networkmanager.network.get_node(link['source'])
-            for i in index:
-                trigger_link = link['links'][i-1].split('-')[0]
-                trigger_link_index = link['links'][i-1].split('-')[1]
-                trigger_node.subcomponents[f"qsource_{trigger_node.name}_{trigger_link}_{trigger_link_index}"].trigger()
-
+        if link_to_trigger is None:
+            for link in self._path['comms']:
+                trigger_node = self._networkmanager.network.get_node(link['source'])
+                for i in index:
+                    trigger_link = link['links'][i-1].split('-')[0]
+                    trigger_link_index = link['links'][i-1].split('-')[1]
+                    trigger_node.subcomponents[f"qsource_{trigger_node.name}_{trigger_link}_{trigger_link_index}"].trigger()
+        else:
+            #trigger_node = self._networkmanager.network.get_node(link['source'])
+            pass #TODO
     def set_purif_rounds(self, purif_rounds):
         self._purif_rounds = purif_rounds
         if self._purif_rounds == 1: # Set memories for the second link
@@ -310,13 +317,15 @@ class RouteProtocol(LocalProtocol):
                     #trigger all sources in the path
                     self.signal_sources(index=[1])
 
-                    timer_event = self._schedule_after(self._total_delay, evtypetimer)
+                    if self._loss_strategy == 'e2e': 
+                        #Only scheduled when recovery loss strategy is E2E, otherwise losses are recovered by SwapLossProtocol
+                        timer_event = self._schedule_after(self._total_delay, evtypetimer)
 
                     evexpr_protocol = (self.await_port_input(self._portleft_1)) & \
                         (self.await_signal(self.subprotocols[f"CorrectProtocol_{self._path['request']}_1"], Signals.SUCCESS))
                     #if timer is triggered, qubit has been lost in a link. Else entanglement
                     # swapping has succeeded
-
+                      
                     evexpr = yield evexpr_timer | evexpr_protocol
                     
                     if evexpr.second_term.value: #swapping ok
@@ -334,7 +343,7 @@ class RouteProtocol(LocalProtocol):
                     purification_done = False
                     while not purification_done:
                         pur_round = 0
-                        while (pur_round <= self._purif_rounds):# and (qubit_lost == False):
+                        while (pur_round < self._purif_rounds):# and (qubit_lost == False):
                             if pur_round == 0: #First round
                                 #trigger all sources in the path
                                 self.signal_sources(index=[1,2])
@@ -344,7 +353,9 @@ class RouteProtocol(LocalProtocol):
                                     self.await_port_input(self._portleft_2) & \
                                     self.await_signal(self.subprotocols[f"CorrectProtocol_{self._path['request']}_2"], Signals.SUCCESS))
 
-                                timer_event = self._schedule_after(self._total_delay, evtypetimer)
+                                if self._loss_strategy == 'e2e':
+                                    #Only scheduled when recovery loss strategy is E2E, otherwise losses are recovered by SwapLossProtocol
+                                    timer_event = self._schedule_after(self._total_delay, evtypetimer)
 
                             else: #we keep the qubit in the first link and trigger EPRs in the second
                                 #trigger all sources in the path
@@ -354,7 +365,9 @@ class RouteProtocol(LocalProtocol):
                                 evexpr_protocol = (self.await_port_input(self._portleft_2) & \
                                     self.await_signal(self.subprotocols[f"CorrectProtocol_{self._path['request']}_2"], Signals.SUCCESS))
 
-                                timer_event = self._schedule_after(self._total_delay, evtypetimer)
+                                if self._loss_strategy == 'e2e':
+                                    #Only scheduled when recovery loss strategy is E2E, otherwise losses are recovered by SwapLossProtocol   
+                                    timer_event = self._schedule_after(self._total_delay, evtypetimer)
 
                             #Wait for qubits in both links and corrections in both or timer is over
                             evexpr_proto = yield evexpr_timer | evexpr_protocol
@@ -370,13 +383,13 @@ class RouteProtocol(LocalProtocol):
                                 expr_distil = yield (self.await_signal(self.subprotocols[f"DistilProtocol_{self._path['nodes'][0]}_{self._path['request']}"], self._purif_result_signal) &
                                     self.await_signal(self.subprotocols[f"DistilProtocol_{self._path['nodes'][-1]}_{self._path['request']}"], self._purif_result_signal))
 
-                                source_protocol1 = expr_distil.second_term.atomic_source
+                                source_protocol1 = expr_distil.first_term.atomic_source
                                 ready_signal1 = source_protocol1.get_signal_by_event(
-                                    event=expr_distil.second_term.triggered_events[0], receiver=self)
+                                    event=expr_distil.first_term.triggered_events[0], receiver=self)
                                 source_protocol2 = expr_distil.second_term.atomic_source
                                 ready_signal2 = source_protocol2.get_signal_by_event(
                                     event=expr_distil.second_term.triggered_events[0], receiver=self)
-                                
+
                                 #if both SUCCESS signals have result 0, purification has succeeded
                                 #if any has value not equal to cero, purification must be restarted
                                 if ready_signal1.result == 0 and ready_signal2.result ==0:
@@ -427,7 +440,7 @@ class SwapProtocol(NodeProtocol):
         # get index of link
         div_pos = name.rfind('_')
         self._index = name[div_pos+1:div_pos+2]
-
+        
         self._request = request
         self._mem_left = mem_left
         self._mem_right = mem_right
@@ -495,6 +508,24 @@ class SwapLossProtocol(NodeProtocol):
     def __init__(self, node, mem_left, mem_right, name, request, l_timeout= 1000, r_timeout=1000):
         super().__init__(node, name)
 
+        # get index of link
+        div_pos = name.rfind('_')
+        self._index = name[div_pos+1:div_pos+2]
+        ic(self._index)#TODO: REMOVE
+        self._request = request
+        self._mem_left = mem_left
+        self._mem_right = mem_right
+
+        self._qmem_input_port_l = self.node.qmemory.ports[f"qin{mem_left}"] if mem_left is not None else None
+        self._qmem_input_port_r = self.node.qmemory.ports[f"qin{mem_right}"] if mem_right is not None else None
+        
+        if self._qmem_input_port_l is not None and self._qmem_input_port_r is not None:
+            #This element is a switch, Bell measurements will take place
+            self._program = QuantumProgram(num_qubits=2)
+            q1, q2 = self._program.get_qubit_indices(num_qubits=2)
+            self._program.apply(INSTR_MEASURE_BELL, [q1, q2], output_key="m", inplace=False)
+
+
     def run(self):
         #Get instruction duration for timer. Minimum is 100
         max_duration = 100
@@ -503,8 +534,36 @@ class SwapLossProtocol(NodeProtocol):
                 max_duration = inst.duration
         timer_duration = max_duration*0.1 if max_duration > 1000 else 100
 
-        #while True:
-        #    pass
+        while True:
+            ic('Mido')    
+            yield (self.await_port_input(self._qmem_input_port_l) &
+                   self.await_port_input(self._qmem_input_port_r))
+
+            #TODO: Add six conditions to perform bell measurement
+            #Add to node queue
+            self.node.add_request(self.name)
+    
+            #More than two requests can arrive at the same time to qprocessor
+            not_serviced = True
+            while not_serviced:
+                
+                if self.name == self.node.get_request('first'): #First in queue, can be serviced   
+
+                    #Check for future removal. We manage qprocessor with FIFO queue
+                    # Perform Bell measurement
+                    #if self.node.qmemory.busy:
+                    #    yield self.await_program(self.node.qmemory)
+
+                    yield self.node.qmemory.execute_program(self._program, qubit_mapping=[self._mem_right, self._mem_left])
+                    #Serviced, remove from queue
+                    self.node.remove_request('first')
+                    not_serviced = False
+                else: #Must wait for other to complete
+                    yield self.await_timer(duration=timer_duration) #Nothing to do, just wait
+
+            m, = self._program.output["m"]
+            # Send result to right node on end
+            self.node.ports[f"ccon_R_{self.node.name}_{self._request}_{self._index}"].tx_output(Message(m))
             
 class SwapCorrectProgram(QuantumProgram):
     """Quantum processor program that applies all swap corrections."""
