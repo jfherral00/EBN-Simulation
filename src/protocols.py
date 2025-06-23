@@ -63,6 +63,11 @@ class RouteProtocol(LocalProtocol):
         #add correct protocol restart signal. Needed when purification is used and one quit is lost
         self._restart_signal = 'RESTART_CORRECT_PROTOCOL'
         self.add_signal(self._restart_signal)
+        
+        #Signal to be used when loss strategy is 'link'.
+        # Will be used by RouteProtocol to signal the different SwapProtocols that an EPR is requested
+        self._link_epr_requested = 'LINK_EPR_REQUESTED'
+        self.add_signal(self._link_epr_requested)
 
         #Swap protocol is different depending on the loss strategy
         if self._loss_strategy == 'e2e':    
@@ -128,9 +133,12 @@ class RouteProtocol(LocalProtocol):
                 self.add_subprotocol(subprotocol)
 
         else: #loss_strategy is 'link'
+            self._epr_requested_signals = {}#Dictionary that will store the signals to send to the different SwapProtocols for EPR regeneration
             self._total_delay=10000000 #TODO: Borrar cuando estén las pérdidas en enlace
             for nodepos in range(len(path['nodes'])):
                 node = path['nodes'][nodepos]
+                previous_node_name = path['nodes'][nodepos-1] if nodepos > 0 else None
+                next_node_name = path['nodes'][nodepos+1] if nodepos < len(path['nodes']) - 1 else None
                 link_left = path['comms'][nodepos-1]['links'][0] if nodepos > 0 else None
                 link_right = path['comms'][nodepos]['links'][0] if nodepos < len(path['nodes']) - 1 else None
 
@@ -139,29 +147,43 @@ class RouteProtocol(LocalProtocol):
                     #if source is in this switch, then distance is 0; otherwise is the distance
                     link_left_distance = networkmanager.get_config('links',link_left.split('-')[0],'distance')
                     link_left_distance = 0 if path['comms'][nodepos-1]['source'] == node else float(link_left_distance)
+                    source_delay_left = networkmanager.get_config('links',link_left.split('-')[0],'source_delay')
                     
                     #Get photon speed in each of the links. With the speed calculate timeout
                     photon_speed_left = float(networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
-                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) 
+                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) + int(source_delay_left) + 100 #100 ns margin to avoid false timeouts
+                    
+                    left_qsource_node = networkmanager.network.get_node(path['comms'][nodepos-1]['source'])
+                    left_qsource = left_qsource_node.subcomponents[f"qsource_{left_qsource_node.name}_{link_left.split('-')[0]}_{link_left.split('-')[1]}"]
                 else:
                     mem_pos_left = None
                     link_left_distance = None
                     l_timeout = None
+                    left_qsource = None
                 
                 if link_right is not None:
                     mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
                     link_right_distance = networkmanager.get_config('links',link_right.split('-')[0],'distance')
                     link_right_distance = 0 if path['comms'][nodepos]['source'] == node else float(link_right_distance)
+                    source_delay_right = networkmanager.get_config('links',link_right.split('-')[0],'source_delay')
                     photon_speed_right = float(networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
-                    r_timeout = int(1e9 * link_right_distance / photon_speed_right)
+                    r_timeout = int(1e9 * link_right_distance / photon_speed_right) + int(source_delay_right) + 100 #100 ns margin to avoid false timeouts
+                    
+                    right_qsource_node = networkmanager.network.get_node(path['comms'][nodepos]['source'])
+                    right_qsource = right_qsource_node.subcomponents[f"qsource_{right_qsource_node.name}_{link_right.split('-')[0]}_{link_right.split('-')[1]}"]
                 else:
                     mem_pos_right = None
                     link_right_distance = None
                     r_timeout = None
+                    right_qsource = None
                 
-                ic(node,link_left_distance,link_right_distance)#TODO: DELETE This line
-
-                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout)
+                ic(node,link_left_distance,l_timeout,link_right_distance,r_timeout)#TODO: DELETE This line
+                
+                link_epr_requested_label = 'LINK_EPR_REQUESTED'+f"SwapProtocol_{node}_{path['request']}_1"
+                self._epr_requested_signals[f"SwapProtocol_{node}_{path['request']}_1"] = link_epr_requested_label
+                self.add_signal(self._epr_requested_signals[f"SwapProtocol_{node}_{path['request']}_1"])
+                link_restart_expr = self.await_signal(self,link_epr_requested_label)
+                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
                 self.add_subprotocol(subprotocol)
                 
         for connection in self._networkmanager.network.connections:  #TODO: REMOVE
@@ -241,6 +263,8 @@ class RouteProtocol(LocalProtocol):
         else:# loss_strategy is 'link'
             for nodepos in range(len(self._path['nodes'])):
                 node = self._path['nodes'][nodepos]
+                previous_node_name = path['nodes'][nodepos-1] if nodepos > 0 else None
+                next_node_name = path['nodes'][nodepos+1] if nodepos < len(path['nodes']) - 1 else None
                 link_left = self._path['comms'][nodepos-1]['links'][0] if nodepos > 0 else None
                 link_right = self._path['comms'][nodepos]['links'][0] if nodepos < len(self._path['nodes']) - 1 else None
 
@@ -249,10 +273,11 @@ class RouteProtocol(LocalProtocol):
                     #if source is in this switch, then distance is 0; otherwise is the distance
                     link_left_distance = networkmanager.get_config('links',link_left.split('-')[0],'distance')
                     link_left_distance = 0 if self._path['comms'][nodepos-1]['source'] == node else float(link_left_distance)
+                    source_delay_left = networkmanager.get_config('links',link_left.split('-')[0],'source_delay')
                     
                     #Get photon speed in each of the links. With the speed calculate timeout
                     photon_speed_left = float(networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
-                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) 
+                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) + int(source_delay_left) + 100 #100 ns margin to avoid false timeouts
                 else:
                     mem_pos_left = None
                     link_left_distance = None
@@ -262,16 +287,17 @@ class RouteProtocol(LocalProtocol):
                     mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
                     link_right_distance = networkmanager.get_config('links',link_right.split('-')[0],'distance')
                     link_right_distance = 0 if self._path['comms'][nodepos]['source'] == node else float(link_right_distance)
+                    source_delay_right = networkmanager.get_config('links',link_right.split('-')[0],'source_delay')
                     photon_speed_right = float(networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
-                    r_timeout = int(1e9 * link_right_distance / photon_speed_right)
+                    r_timeout = int(1e9 * link_right_distance / photon_speed_right) + int(source_delay_right) + 100 #100 ns margin to avoid false timeouts
                 else:
                     mem_pos_right = None
                     link_right_distance = None
                     r_timeout = None
                 
-                ic(node,link_left_distance,link_right_distance)
-
-                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout)
+                ic(node,link_left_distance,l_timeout,link_right_distance,r_timeout) #TODO: REMOVE
+                link_restart_expr = self.await_signal(self,self._link_epr_requested)
+                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr)
                 self.add_subprotocol(subprotocol)
 
 
@@ -317,6 +343,11 @@ class RouteProtocol(LocalProtocol):
                 if self._purif_rounds == 0:
                     #trigger all sources in the path
                     self.signal_sources(index=[1])
+                    if self._loss_strategy == 'link':
+                        #Signal all SwapProtocols index #1 that an EPR is requested
+                        for swapproto in self.subprotocols.values():
+                            if isinstance(swapproto, SwapProtocol) and swapproto._index == '1':
+                                self.send_signal(self._epr_requested_signals[swapproto.name], [1])
 
                     if self._loss_strategy == 'e2e': 
                         #Only scheduled when recovery loss strategy is E2E, otherwise losses are recovered by SwapProtocol
@@ -349,6 +380,12 @@ class RouteProtocol(LocalProtocol):
                             if pur_round == 0: #First round
                                 #trigger all sources in the path
                                 self.signal_sources(index=[1,2])
+                                if self._loss_strategy == 'link':
+                                    #Signal all SwapProtocols that an EPR is requested
+                                    for swapproto in self.subprotocols.values():
+                                        if isinstance(swapproto, SwapProtocol):
+                                            self.send_signal(self._epr_requested_signals[swapproto.name], [swapproto._index])
+
 
                                 evexpr_protocol = (self.await_port_input(self._portleft_1) & \
                                     self.await_signal(self.subprotocols[f"CorrectProtocol_{self._path['request']}_1"], Signals.SUCCESS) &\
@@ -362,6 +399,12 @@ class RouteProtocol(LocalProtocol):
                             else: #we keep the qubit in the first link and trigger EPRs in the second
                                 #trigger all sources in the path
                                 self.signal_sources(index=[2])
+                                if self._loss_strategy == 'link':
+                                    #Signal all SwapProtocols index #2 that an EPR is requested
+                                    for swapproto in self.subprotocols.values():
+                                        if isinstance(swapproto, SwapProtocol) and swapproto._index == '2':
+                                            self.send_signal(self._epr_requested_signals[swapproto.name], [2])
+
 
                                 #Wait for qubits in both links and corrections in both
                                 evexpr_protocol = (self.await_port_input(self._portleft_2) & \
@@ -436,11 +479,17 @@ class SwapProtocol(NodeProtocol):
     mem_right: second memory positions assigned for entanglement swapping
     request: request id for the path that the entanglement swapping is being performed
     loss_strategy: loss strategy when recovering from photon losses
-    l_timeout: timeout for left link (nanoseconds)
-    r_timeout: timeout for right link (nanoseconds)
+    When loss_strategy is 'link':
+        l_timeout: timeout for left link (nanoseconds)
+        r_timeout: timeout for right link (nanoseconds)
+        previous_node: name of the previous node in the path
+        next_node: name of the next node in the path
+        link_restart_expr: event expression to restart the link when a qubit is lost
+        left_qsource: left qsource to trigger link EPR
+        right_qsource: right qsource to trigger link EPR
     """
 
-    def __init__(self, node, mem_left, mem_right, name, request, loss_strategy= 'e2e' , l_timeout= 1000, r_timeout=1000):
+    def __init__(self, node, mem_left, mem_right, name, request, loss_strategy= 'e2e' , l_timeout= 1000, r_timeout=1000, previous_node=None, next_node=None, link_restart_expr=None, left_qsource = None, right_qsource = None):
         super().__init__(node, name)
         self._loss_strategy = loss_strategy
 
@@ -451,6 +500,18 @@ class SwapProtocol(NodeProtocol):
         self._request = request
         self._mem_left = mem_left
         self._mem_right = mem_right
+        self._l_timeout = l_timeout
+        self._r_timeout = r_timeout
+        self._previous_node = previous_node
+        self._next_node = next_node
+        self._link_restart_expr = link_restart_expr
+        self._left_qsource = left_qsource
+        self._right_qsource = right_qsource
+        
+        #Signal to be used when loss strategy is 'link'.
+        # Will be used by RouteProtocol to signal the different SwapProtocols that an EPR is requested
+        self._link_epr_requested = 'LINK_EPR_REQUESTED'+self.name
+        self.add_signal(self._link_epr_requested)
         
         self._qmem_input_port_l = self.node.qmemory.ports[f"qin{mem_left}"] if mem_left is not None else None
         self._qmem_input_port_r = self.node.qmemory.ports[f"qin{mem_right}"] if mem_right is not None else None
@@ -461,30 +522,151 @@ class SwapProtocol(NodeProtocol):
             self._program.apply(INSTR_MEASURE_BELL, [q1, q2], output_key="m", inplace=False)
 
     def run(self):
+        
+        #Qubit lost when qchannel model has losses
+        l_evtypetimer = EventType("Timer","Qubit in left channel is lost")
+        r_evtypetimer = EventType("Timer","Qubit in right channel is lost")
+        #set event type in order to detect qubit losses
+        l_evexpr_timer = EventExpression(source=self, event_type=l_evtypetimer)
+        r_evexpr_timer = EventExpression(source=self, event_type=r_evtypetimer)
+        
         #Get instruction duration for timer. Minimum is 100
+        # This timer is used when the switch has more than one Bel measurement to fulfill
         max_duration = 100
         for inst in self.node.qmemory.get_physical_instructions():
             if inst.duration > max_duration:
                 max_duration = inst.duration
         timer_duration = max_duration*0.1 if max_duration > 1000 else 100
 
+        #Initiate loss timers for the first time if loss_strategy is 'link'
+        #TODO: REMOVE this block
+        #if self._loss_strategy == 'link':
+        #    l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) if self._l_timeout is not None else None
+        #    r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) if self._r_timeout is not None else None
+
+        #Dictionaries that will store result of link entanglements when 'link' loss_strategy is selected
+        l_Ready = {} 
+        r_Ready = {}
+        sl_Ready = {}
+        sr_Ready = {}
+        l_timerevent = None
+        r_timerevent = None
+        
         while True:
             measurement_ready = False
-            end_node = False
+            end_node = False #TODO: Este booleano se podrá quitar
             if self._loss_strategy == 'e2e':                    
                 yield (self.await_port_input(self._qmem_input_port_l) &
                        self.await_port_input(self._qmem_input_port_r))
                 measurement_ready = True
             else:
-                #TODO: las 6 condiciones
-                if self._qmem_input_port_l is not None and self._qmem_input_port_r is not None:
-                    evexpr_loss = (self.await_port_input(self._qmem_input_port_l) &
-                        self.await_port_input(self._qmem_input_port_r))
-                    yield evexpr_loss
+                #Build event expression
+                # Además, debe comprobar que el índice enviado en la señal es el suyo
+                evexpr_loss = self._link_restart_expr
+                #TODO: Procesar la señal para iniciar los timers de los enlaces
+                # On the left port it will wait for a qubit to be stored in the memory, or timeout while
+                # waiting for the qubit (loss) or a classical signal is received from the previous node
+                if self._qmem_input_port_l is not None:
+                    evexpr_loss = evexpr_loss | self.await_port_input(self._qmem_input_port_l) | l_evexpr_timer \
+                            | self.await_port_input(self.node.ports[f"ccon_L_{self._previous_node}_{self.node.name}_loss_{self._request}_{self._index}"])
+                # On the right port it will wait for a qubit to be stored in the memory, or timeout while
+                # waiting for the qubit (loss) or a classical signal is received from the next node    
+                if self._qmem_input_port_r is not None:
+                    evexpr_loss = evexpr_loss | self.await_port_input(self._qmem_input_port_r) | r_evexpr_timer \
+                        | self.await_port_input(self.node.ports[f"ccon_R_{self._next_node}_{self.node.name}_loss_{self._request}_{self._index}"])
+
+                yield evexpr_loss #Wait for any of the events
+                for event in evexpr_loss.triggered_events:
+                    if event.source.name == f"RouteProtocol_{self._request}": #RouteProtocol has asked for EPR generation
+                        #Check if the id is the same as the one we are processing
+                        ready_signal = event.source.get_signal_by_event(
+                                event=event, receiver=self)
+                        ic(ready_signal.result,self.node.name) #TODO: REMOVE
+                        #Initialize loss signaling semaphores
+                        l_Ready = {} 
+                        sl_Ready = {}
+                        idl = 0 #Will identify the generated EPR when loss_strategy is selected
+                        l_Ready[idl] = 0
+                        sl_Ready[idl] = 0
+                        r_Ready = {}
+                        sr_Ready = {}
+                        idr = 0
+                        r_Ready[idr] = 0
+                        sr_Ready[idr] = 0
+                        l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) if (self._l_timeout is not None and self._l_timeout > 0) else None
+                        r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) if (self._r_timeout is not None and self._r_timeout > 0) else None
+
+                    elif event.source.name != self.name: #Events comming from this node are timeouts
+                        if event.source.component == self.node.qmemory and event.source.name == f"qin{self._mem_left}":
+                            #Left qubit is ready
+                            l_Ready[idl] = 1
+                            self.node.ports[f"ccon_L_{self.node.name}_{self._previous_node}_loss_{self._request}_{self._index}"].tx_output(Message(['OK',idl]))
+                            ic('qubit in left')
+                            if l_timerevent is not None:
+                                l_timerevent.unschedule()
+                                l_timerevent = None
+                        elif event.source.component == self.node.qmemory and event.source.name == f"qin{self._mem_right}":
+                            #Right qubit is ready
+                            r_Ready[idr] = 1
+                            self.node.ports[f"ccon_R_{self.node.name}_{self._next_node}_loss_{self._request}_{self._index}"].tx_output(Message(['OK',idr]))
+                            ic('qubit in right')
+                            if r_timerevent is not None:
+                                r_timerevent.unschedule()
+                                r_timerevent = None
+                        elif event.source.name == f"ccon_L_{self._previous_node}_{self.node.name}_loss_{self._request}_{self._index}":
+                            #Classical message from previous node
+                            message = self.node.ports[f"ccon_L_{self._previous_node}_{self.node.name}_loss_{self._request}_{self._index}"].rx_input()
+                            m = message.items
+                            id = m[1]
+                            if m[0] == 'OK':
+                                #If message is OK, then we have a qubit in the right memory position of the previous node
+                                sl_Ready[id] = 1
+                                ic('Classical message from previous node OK') #TODO: REMOVE
+                            else: #timeout in previous node
+                                ic('Classical message Timeout in left previous node') #REMOVE
+                                sl_Ready[id] = 0
+                                l_Ready[id] = 0
+                                #TODO: Check if current qubit in L mem position must be discarded
+                        elif event.source.name == f"ccon_R_{self._next_node}_{self.node.name}_loss_{self._request}_{self._index}":
+                            #Classical message from next node
+                            message = self.node.ports[f"ccon_R_{self._next_node}_{self.node.name}_loss_{self._request}_{self._index}"].rx_input()
+                            m = message.items  
+                            id = m[1]
+                            if m[0] == 'OK':
+                                #If message is OK, then we have a qubit in the left memory position of the next node
+                                sr_Ready[id] = 1
+                                ic('Classical message from next node OK') #TODO: REMOVE
+                            else: #timeout in previous node
+                                ic('Classical message Timeout in next node') #REMOVE
+                                sr_Ready[id] = 0
+                                r_Ready[id] = 0
+                                #TODO: Check if current qubit in R mem position must be discarded
+                        
+                    if event.type == l_evtypetimer: #Left qubit is lost
+                        ic('Timeout_in_left')
+                        l_Ready[idl] = 0
+                        self.node.ports[f"ccon_L_{self.node.name}_{self._previous_node}_loss_{self._request}_{self._index}"].tx_output(Message(['NOT_OK',idl]))
+                        #Ask source for new EPR 
+                        idl += 1 #link entanglement is regenerated
+                        l_Ready[idl] = 0
+                        #Signal source in left link and restart timers
+                        self._left_qsource.trigger() #if self._left_qsource is not None else None
+                        l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) #if (self._l_timeout is not None and self._l_timeout > 0) else None
+                        
+                    if event.type == r_evtypetimer: #Right qubit is lost
+                        ic('Timeout_in_right')   
+                        r_Ready[idr] = 0
+                        self.node.ports[f"ccon_R_{self.node.name}_{self._next_node}_loss_{self._request}_{self._index}"].tx_output(Message(['NOT_OK',idr]))
+                        #Ask source for new EPR 
+                        id += 1 #link entanglement is regenerated
+                        l_Ready[idr] = 0
+                        #Signal source in right link and restart timers
+                        self._right_qsource.trigger() #if self._right_qsource is not None else None
+                        r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) #if (self._r_timeout is not None and self._r_timeout > 0) else None
+       
+                if (idl in l_Ready.keys() and l_Ready[idl] == 1) and (idr in r_Ready.keys() and r_Ready[idr] == 1) and (idl in sl_Ready.keys() and sl_Ready[idl] == 1) and (idr in sr_Ready.keys() and sr_Ready[idr] == 1):
                     measurement_ready = True
-                else:
-                    yield self.await_timer(duration=timer_duration)
-                    end_node = True
+                    #TODO: Check end nodes, only one _Ready is available
             
             if measurement_ready and not end_node: #Switch has qubits ready in the 2 memory positions
                 #Add to node queue
@@ -511,82 +693,10 @@ class SwapProtocol(NodeProtocol):
                 m, = self._program.output["m"]
                 # Send result to right node on end
                 self.node.ports[f"ccon_R_{self.node.name}_{self._request}_{self._index}"].tx_output(Message(m))
-    
-class SwapLossProtocol(NodeProtocol):
-    """Perform Swap on a repeater node with a link level loss recovery strategy.
-    TODO: Implement loss strategy
-
-    Parameters
-    ----------
-    node : :class:`~netsquid.nodes.node.Node` or None, optional
-        Node this protocol runs on.
-    name : str
-        Name of this protocol.
-    mem_left: first memory positions assigned for entanglement swapping
-    mem_right: second memory positions assigned for entanglement swapping
-    request: request id for the path that the entanglement swapping is being performed
-    l_timeout: timeout for left link (nanoseconds)
-    r_timeout: timeout for right link (nanoseconds)
-    """
-
-    def __init__(self, node, mem_left, mem_right, name, request, l_timeout= 1000, r_timeout=1000):
-        super().__init__(node, name)
-
-        # get index of link
-        div_pos = name.rfind('_')
-        self._index = name[div_pos+1:div_pos+2]
-        self._request = request
-        self._mem_left = mem_left
-        self._mem_right = mem_right
-
-        self._qmem_input_port_l = self.node.qmemory.ports[f"qin{mem_left}"] if mem_left is not None else None
-        self._qmem_input_port_r = self.node.qmemory.ports[f"qin{mem_right}"] if mem_right is not None else None
-        
-        if self._qmem_input_port_l is not None and self._qmem_input_port_r is not None:
-            #This element is a switch, Bell measurements will take place
-            self._program = QuantumProgram(num_qubits=2)
-            q1, q2 = self._program.get_qubit_indices(num_qubits=2)
-            self._program.apply(INSTR_MEASURE_BELL, [q1, q2], output_key="m", inplace=False)
-
-
-    def run(self):
-        #Get instruction duration for timer. Minimum is 100
-        max_duration = 100
-        for inst in self.node.qmemory.get_physical_instructions():
-            if inst.duration > max_duration:
-                max_duration = inst.duration
-        timer_duration = max_duration*0.1 if max_duration > 1000 else 100
-
-        while True:   
-            yield (self.await_port_input(self._qmem_input_port_l) &
-                   self.await_port_input(self._qmem_input_port_r))
-
-            #TODO: Add six conditions to perform bell measurement
-            #Add to node queue
-            self.node.add_request(self.name)
-    
-            #More than two requests can arrive at the same time to qprocessor
-            not_serviced = True
-            while not_serviced:
-                
-                if self.name == self.node.get_request('first'): #First in queue, can be serviced   
-
-                    #Check for future removal. We manage qprocessor with FIFO queue
-                    # Perform Bell measurement
-                    #if self.node.qmemory.busy:
-                    #    yield self.await_program(self.node.qmemory)
-
-                    yield self.node.qmemory.execute_program(self._program, qubit_mapping=[self._mem_right, self._mem_left])
-                    #Serviced, remove from queue
-                    self.node.remove_request('first')
-                    not_serviced = False
-                else: #Must wait for other to complete
-                    yield self.await_timer(duration=timer_duration) #Nothing to do, just wait
-
-            m, = self._program.output["m"]
-            # Send result to right node on end
-            self.node.ports[f"ccon_R_{self.node.name}_{self._request}_{self._index}"].tx_output(Message(m))
             
+                #Reset variables
+                measurement_ready = False
+                
 class SwapCorrectProgram(QuantumProgram):
     """Quantum processor program that applies all swap corrections."""
     default_num_qubits = 1
