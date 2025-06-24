@@ -177,12 +177,14 @@ class RouteProtocol(LocalProtocol):
                     r_timeout = None
                     right_qsource = None
                 
-                ic(node,link_left_distance,l_timeout,link_right_distance,r_timeout)#TODO: DELETE This line
-                
+                #TODO: DELETE ONCE TESTED
+                '''
                 link_epr_requested_label = 'LINK_EPR_REQUESTED'+f"SwapProtocol_{node}_{path['request']}_1"
                 self._epr_requested_signals[f"SwapProtocol_{node}_{path['request']}_1"] = link_epr_requested_label
                 self.add_signal(self._epr_requested_signals[f"SwapProtocol_{node}_{path['request']}_1"])
                 link_restart_expr = self.await_signal(self,link_epr_requested_label)
+                '''
+                link_restart_expr = self.await_signal(self,self._link_epr_requested)
                 subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
                 self.add_subprotocol(subprotocol)
                 
@@ -265,8 +267,8 @@ class RouteProtocol(LocalProtocol):
                 node = self._path['nodes'][nodepos]
                 previous_node_name = path['nodes'][nodepos-1] if nodepos > 0 else None
                 next_node_name = path['nodes'][nodepos+1] if nodepos < len(path['nodes']) - 1 else None
-                link_left = self._path['comms'][nodepos-1]['links'][0] if nodepos > 0 else None
-                link_right = self._path['comms'][nodepos]['links'][0] if nodepos < len(self._path['nodes']) - 1 else None
+                link_left = self._path['comms'][nodepos-1]['links'][1] if nodepos > 0 else None
+                link_right = self._path['comms'][nodepos]['links'][1] if nodepos < len(self._path['nodes']) - 1 else None
 
                 if link_left is not None:
                     mem_pos_left = networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1]) 
@@ -278,10 +280,14 @@ class RouteProtocol(LocalProtocol):
                     #Get photon speed in each of the links. With the speed calculate timeout
                     photon_speed_left = float(networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
                     l_timeout = int(1e9 * link_left_distance / photon_speed_left) + int(source_delay_left) + 100 #100 ns margin to avoid false timeouts
+                    
+                    left_qsource_node = networkmanager.network.get_node(self._path['comms'][nodepos-1]['source'])
+                    left_qsource = left_qsource_node.subcomponents[f"qsource_{left_qsource_node.name}_{link_left.split('-')[0]}_{link_left.split('-')[1]}"]
                 else:
                     mem_pos_left = None
                     link_left_distance = None
                     l_timeout = None
+                    left_qsource = None
                 
                 if link_right is not None:
                     mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
@@ -290,14 +296,16 @@ class RouteProtocol(LocalProtocol):
                     source_delay_right = networkmanager.get_config('links',link_right.split('-')[0],'source_delay')
                     photon_speed_right = float(networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
                     r_timeout = int(1e9 * link_right_distance / photon_speed_right) + int(source_delay_right) + 100 #100 ns margin to avoid false timeouts
+                    right_qsource_node = networkmanager.network.get_node(self._path['comms'][nodepos]['source'])
+                    right_qsource = right_qsource_node.subcomponents[f"qsource_{right_qsource_node.name}_{link_right.split('-')[0]}_{link_right.split('-')[1]}"]
                 else:
                     mem_pos_right = None
                     link_right_distance = None
                     r_timeout = None
+                    right_qsource = None
                 
-                ic(node,link_left_distance,l_timeout,link_right_distance,r_timeout) #TODO: REMOVE
                 link_restart_expr = self.await_signal(self,self._link_epr_requested)
-                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr)
+                subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
                 self.add_subprotocol(subprotocol)
 
 
@@ -345,9 +353,11 @@ class RouteProtocol(LocalProtocol):
                     self.signal_sources(index=[1])
                     if self._loss_strategy == 'link':
                         #Signal all SwapProtocols index #1 that an EPR is requested
-                        for swapproto in self.subprotocols.values():
-                            if isinstance(swapproto, SwapProtocol) and swapproto._index == '1':
-                                self.send_signal(self._epr_requested_signals[swapproto.name], [1])
+                        self.send_signal(self._link_epr_requested, ['1'])
+                        #TODO: DELETE ONCE tested
+                        #for swapproto in self.subprotocols.values():
+                        #    if isinstance(swapproto, SwapProtocol) and swapproto._index == '1':
+                        #        self.send_signal(self._epr_requested_signals[swapproto.name], ['1'])
 
                     if self._loss_strategy == 'e2e': 
                         #Only scheduled when recovery loss strategy is E2E, otherwise losses are recovered by SwapProtocol
@@ -366,7 +376,6 @@ class RouteProtocol(LocalProtocol):
                         round_done = True
                     else:
                         #qubit is lost, must restart
-                        #ic(f"{self.name} Lost qubit in Route protocol")
                         #restart correction protocol
                         self.send_signal(self._restart_signal)
                         #repeat round
@@ -382,9 +391,11 @@ class RouteProtocol(LocalProtocol):
                                 self.signal_sources(index=[1,2])
                                 if self._loss_strategy == 'link':
                                     #Signal all SwapProtocols that an EPR is requested
-                                    for swapproto in self.subprotocols.values():
-                                        if isinstance(swapproto, SwapProtocol):
-                                            self.send_signal(self._epr_requested_signals[swapproto.name], [swapproto._index])
+                                    #TODO: DELETE ONCE tested
+                                    self.send_signal(self._link_epr_requested, ['1','2'])
+                                    #for swapproto in self.subprotocols.values():
+                                    #    if isinstance(swapproto, SwapProtocol):
+                                    #        self.send_signal(self._epr_requested_signals[swapproto.name], [swapproto._index])
 
 
                                 evexpr_protocol = (self.await_port_input(self._portleft_1) & \
@@ -401,9 +412,11 @@ class RouteProtocol(LocalProtocol):
                                 self.signal_sources(index=[2])
                                 if self._loss_strategy == 'link':
                                     #Signal all SwapProtocols index #2 that an EPR is requested
-                                    for swapproto in self.subprotocols.values():
-                                        if isinstance(swapproto, SwapProtocol) and swapproto._index == '2':
-                                            self.send_signal(self._epr_requested_signals[swapproto.name], [2])
+                                    #TODO: DELETE ONCE tested
+                                    self.send_signal(self._link_epr_requested, ['2'])
+                                    #for swapproto in self.subprotocols.values():
+                                    #    if isinstance(swapproto, SwapProtocol) and swapproto._index == '2':
+                                    #        self.send_signal(self._epr_requested_signals[swapproto.name], ['2'])
 
 
                                 #Wait for qubits in both links and corrections in both
@@ -510,7 +523,9 @@ class SwapProtocol(NodeProtocol):
         
         #Signal to be used when loss strategy is 'link'.
         # Will be used by RouteProtocol to signal the different SwapProtocols that an EPR is requested
-        self._link_epr_requested = 'LINK_EPR_REQUESTED'+self.name
+        #TODO: REMOVE ONCE TESTED
+        #self._link_epr_requested = 'LINK_EPR_REQUESTED'+self.name
+        self._link_epr_requested = 'LINK_EPR_REQUESTED'
         self.add_signal(self._link_epr_requested)
         
         self._qmem_input_port_l = self.node.qmemory.ports[f"qin{mem_left}"] if mem_left is not None else None
@@ -582,19 +597,20 @@ class SwapProtocol(NodeProtocol):
                         ready_signal = event.source.get_signal_by_event(
                                 event=event, receiver=self)
                         ic(ready_signal.result,self.node.name) #TODO: REMOVE
-                        #Initialize loss signaling semaphores
-                        l_Ready = {} 
-                        sl_Ready = {}
-                        idl = 0 #Will identify the generated EPR when loss_strategy is selected
-                        l_Ready[idl] = 0
-                        sl_Ready[idl] = 0
-                        r_Ready = {}
-                        sr_Ready = {}
-                        idr = 0
-                        r_Ready[idr] = 0
-                        sr_Ready[idr] = 0
-                        l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) if (self._l_timeout is not None and self._l_timeout > 0) else None
-                        r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) if (self._r_timeout is not None and self._r_timeout > 0) else None
+                        if self._index in ready_signal.result:
+                            #Initialize loss signaling semaphores
+                            l_Ready = {} 
+                            sl_Ready = {}
+                            idl = 0 #Will identify the generated EPR when loss_strategy is selected
+                            l_Ready[idl] = 0
+                            sl_Ready[idl] = 0
+                            r_Ready = {}
+                            sr_Ready = {}
+                            idr = 0
+                            r_Ready[idr] = 0
+                            sr_Ready[idr] = 0
+                            l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) if (self._l_timeout is not None and self._l_timeout > 0) else None
+                            r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) if (self._r_timeout is not None and self._r_timeout > 0) else None
 
                     elif event.source.name != self.name: #Events comming from this node are timeouts
                         if event.source.component == self.node.qmemory and event.source.name == f"qin{self._mem_left}":
