@@ -601,20 +601,17 @@ class SwapProtocol(NodeProtocol):
                             #Initialize loss signaling semaphores
                             l_Ready = {} 
                             sl_Ready = {}
-                            idl = 0 #Will identify the generated EPR when loss_strategy is selected
-                            l_Ready[idl] = 0
-                            sl_Ready[idl] = 0
+                            idl = None #Will identify the generated EPR when loss_strategy is selected
                             r_Ready = {}
                             sr_Ready = {}
-                            idr = 0
-                            r_Ready[idr] = 0
-                            sr_Ready[idr] = 0
+                            idr = None
                             l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) if (self._l_timeout is not None and self._l_timeout > 0) else None
                             r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) if (self._r_timeout is not None and self._r_timeout > 0) else None
 
                     elif event.source.name != self.name: #Events comming from this node are timeouts
                         if event.source.component == self.node.qmemory and event.source.name == f"qin{self._mem_left}":
                             #Left qubit is ready
+                            idl = 0 if idl is None else idl+1
                             l_Ready[idl] = 1
                             self.node.ports[f"ccon_L_{self.node.name}_{self._previous_node}_loss_{self._request}_{self._index}"].tx_output(Message(['OK',idl]))
                             ic('qubit in left')
@@ -623,6 +620,7 @@ class SwapProtocol(NodeProtocol):
                                 l_timerevent = None
                         elif event.source.component == self.node.qmemory and event.source.name == f"qin{self._mem_right}":
                             #Right qubit is ready
+                            idr = 0 if idr is None else idr+1
                             r_Ready[idr] = 1
                             self.node.ports[f"ccon_R_{self.node.name}_{self._next_node}_loss_{self._request}_{self._index}"].tx_output(Message(['OK',idr]))
                             ic('qubit in right')
@@ -659,23 +657,23 @@ class SwapProtocol(NodeProtocol):
                                 #TODO: Check if current qubit in R mem position must be discarded
                         
                     if event.type == l_evtypetimer: #Left qubit is lost
-                        ic('Timeout_in_left')
+                        idl = 0 if idl is None else idl+1
                         l_Ready[idl] = 0
                         self.node.ports[f"ccon_L_{self.node.name}_{self._previous_node}_loss_{self._request}_{self._index}"].tx_output(Message(['NOT_OK',idl]))
                         #Ask source for new EPR 
-                        idl += 1 #link entanglement is regenerated
-                        l_Ready[idl] = 0
+                        #idl += 1 #link entanglement is regenerated
+                        #l_Ready[idl] = 0
                         #Signal source in left link and restart timers
                         self._left_qsource.trigger() #if self._left_qsource is not None else None
                         l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) #if (self._l_timeout is not None and self._l_timeout > 0) else None
                         
                     if event.type == r_evtypetimer: #Right qubit is lost
-                        ic('Timeout_in_right')   
+                        idr = 0 if idr is None else idr+1
                         r_Ready[idr] = 0
                         self.node.ports[f"ccon_R_{self.node.name}_{self._next_node}_loss_{self._request}_{self._index}"].tx_output(Message(['NOT_OK',idr]))
                         #Ask source for new EPR 
-                        id += 1 #link entanglement is regenerated
-                        l_Ready[idr] = 0
+                        #idr += 1 #link entanglement is regenerated
+                        #l_Ready[idr] = 0
                         #Signal source in right link and restart timers
                         self._right_qsource.trigger() #if self._right_qsource is not None else None
                         r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) #if (self._r_timeout is not None and self._r_timeout > 0) else None
