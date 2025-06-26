@@ -134,7 +134,7 @@ class RouteProtocol(LocalProtocol):
 
         else: #loss_strategy is 'link'
             self._epr_requested_signals = {}#Dictionary that will store the signals to send to the different SwapProtocols for EPR regeneration
-            self._total_delay=10000000 #TODO: Borrar cuando estén las pérdidas en enlace
+            #self._total_delay=10000000 #TODO: Borrar cuando estén las pérdidas en enlace
             for nodepos in range(len(path['nodes'])):
                 node = path['nodes'][nodepos]
                 previous_node_name = path['nodes'][nodepos-1] if nodepos > 0 else None
@@ -188,8 +188,8 @@ class RouteProtocol(LocalProtocol):
                 subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
                 self.add_subprotocol(subprotocol)
                 
-        for connection in self._networkmanager.network.connections:  #TODO: REMOVE
-            ic(connection)      #TODO: REMOVE
+        #for connection in self._networkmanager.network.connections:  #TODO: REMOVE
+        #    ic(connection)      #TODO: REMOVE
 
         # preparation of correct protocol in final node
         epr_state =  self._networkmanager.get_config('epr_pair','epr_pair')
@@ -202,40 +202,36 @@ class RouteProtocol(LocalProtocol):
             #If protocol is being instanced with purification from the beggining we need to add second link protocols
             self._init_second_link_protocols('distil')
         
-    def signal_sources(self,index=[1],link_to_trigger=None):
+    def signal_sources(self,index=[1]):
         '''
-        Signals sources:
-            - if link_to_trigger is None, then all sources in the path are signaled
-            - if link_to_trigger is provided, only the source in the link is triggered
-  
+        Signals all sources in the path in order to generate EPR:
         Receives the index to trigger the generation. If none, only first instance will be triggered
         If index=[1,2] then both instances are signaled (purification)
         '''
         if index not in [[1],[2],[1,2]]:
             raise ValueError('Unsupported trigger generation')
-        if link_to_trigger is None:
-            for link in self._path['comms']:
-                trigger_node = self._networkmanager.network.get_node(link['source'])
-                for i in index:
-                    trigger_link = link['links'][i-1].split('-')[0]
-                    trigger_link_index = link['links'][i-1].split('-')[1]
-                    trigger_node.subcomponents[f"qsource_{trigger_node.name}_{trigger_link}_{trigger_link_index}"].trigger()
-        else:
-            #trigger_node = self._networkmanager.network.get_node(link['source'])
-            pass #TODO
+        for link in self._path['comms']:
+            trigger_node = self._networkmanager.network.get_node(link['source'])
+            for i in index:
+                trigger_link = link['links'][i-1].split('-')[0]
+                trigger_link_index = link['links'][i-1].split('-')[1]
+                trigger_node.subcomponents[f"qsource_{trigger_node.name}_{trigger_link}_{trigger_link_index}"].trigger()
+
+        
     def set_purif_rounds(self, purif_rounds):
         self._purif_rounds = purif_rounds
         if self._purif_rounds == 1: # Set memories for the second link
             self._init_second_link_protocols('distil')
             #Update delay time with purification operations in order to detect lost qubit
-            node_name = self._path['nodes'][-1]
-            gate_duration_rotations = self._networkmanager.get_config('nodes',node_name,'gate_duration_rotations') \
-                if self._networkmanager.get_config('nodes',node_name,'gate_duration_rotations') != 'NOT_FOUND' else 0
-            gate_duration_CX = self._networkmanager.get_config('nodes',node_name,'gate_duration_CX') \
-                    if self._networkmanager.get_config('nodes',node_name,'gate_duration_CX') != 'NOT_FOUND' else 0        
-            measurements_duration = self._networkmanager.get_config('nodes',node_name,'measurements_duration') \
-                    if self._networkmanager.get_config('nodes',node_name,'measurements_duration') != 'NOT_FOUND' else 0        
-            self._total_delay += 2 * gate_duration_rotations + gate_duration_CX + measurements_duration
+            #node_name = self._path['nodes'][-1]
+            #gate_duration_rotations = self._networkmanager.get_config('nodes',node_name,'gate_duration_rotations') \
+            #    if self._networkmanager.get_config('nodes',node_name,'gate_duration_rotations') != 'NOT_FOUND' else 0
+            #gate_duration_CX = self._networkmanager.get_config('nodes',node_name,'gate_duration_CX') \
+            #        if self._networkmanager.get_config('nodes',node_name,'gate_duration_CX') != 'NOT_FOUND' else 0        
+            #measurements_duration = self._networkmanager.get_config('nodes',node_name,'measurements_duration') \
+            #        if self._networkmanager.get_config('nodes',node_name,'measurements_duration') != 'NOT_FOUND' else 0        
+            #TODO: This lines have been commented because they are not needed anymore, remove if confirmed
+            #self._total_delay += 2 * gate_duration_rotations + gate_duration_CX + measurements_duration
             
 
     def _init_second_link_protocols(self, purif_proto):
@@ -259,8 +255,8 @@ class RouteProtocol(LocalProtocol):
                 mem_pos_left = self._networkmanager.get_mem_position(node,link_left.split('-')[0],link_left.split('-')[1])
                 mem_pos_right = self._networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
 
-            subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'], loss_strategy = 'e2e')
-            self.add_subprotocol(subprotocol)
+                subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'], loss_strategy = 'e2e')
+                self.add_subprotocol(subprotocol)
 
         else:# loss_strategy is 'link'
             for nodepos in range(len(self._path['nodes'])):
@@ -305,7 +301,7 @@ class RouteProtocol(LocalProtocol):
                     right_qsource = None
                 
                 link_restart_expr = self.await_signal(self,self._link_epr_requested)
-                subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_1", request = self._path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
+                subprotocol = SwapProtocol(node=self._networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{self._path['request']}_2", request = self._path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
                 self.add_subprotocol(subprotocol)
 
 
@@ -337,8 +333,8 @@ class RouteProtocol(LocalProtocol):
 
         #Qubit lost when qchannel model has losses
         evtypetimer = EventType("Timer","Qubit is lost")
-        #set event type in order to detect qubit losses
-        evexpr_timer = EventExpression(source=self, event_type=evtypetimer)
+        #set event type in order to detect qubit losses. Only for e2e loss recovery
+        evexpr_timer = EventExpression(source=self, event_type=evtypetimer) if self._loss_strategy == 'e2e' else None
         
         #for i in range(self._num_runs):
         while True:
@@ -460,7 +456,6 @@ class RouteProtocol(LocalProtocol):
                                     break 
                             else: 
                                 #qubit is lost, must restart round
-                                #ic(f"{self.name} Lost qubit")
                                 #restart correction protocol
                                 self.send_signal(self._restart_signal)
 
@@ -596,7 +591,6 @@ class SwapProtocol(NodeProtocol):
                         #Check if the id is the same as the one we are processing
                         ready_signal = event.source.get_signal_by_event(
                                 event=event, receiver=self)
-                        ic(ready_signal.result,self.node.name) #TODO: REMOVE
                         if self._index in ready_signal.result:
                             #Initialize loss signaling semaphores
                             l_Ready = {} 
@@ -614,7 +608,6 @@ class SwapProtocol(NodeProtocol):
                             idl = 0 if idl is None else idl+1
                             l_Ready[idl] = 1
                             self.node.ports[f"ccon_L_{self.node.name}_{self._previous_node}_loss_{self._request}_{self._index}"].tx_output(Message(['OK',idl]))
-                            ic('qubit in left')
                             if l_timerevent is not None:
                                 l_timerevent.unschedule()
                                 l_timerevent = None
@@ -623,7 +616,6 @@ class SwapProtocol(NodeProtocol):
                             idr = 0 if idr is None else idr+1
                             r_Ready[idr] = 1
                             self.node.ports[f"ccon_R_{self.node.name}_{self._next_node}_loss_{self._request}_{self._index}"].tx_output(Message(['OK',idr]))
-                            ic('qubit in right')
                             if r_timerevent is not None:
                                 r_timerevent.unschedule()
                                 r_timerevent = None
@@ -635,9 +627,7 @@ class SwapProtocol(NodeProtocol):
                             if m[0] == 'OK':
                                 #If message is OK, then we have a qubit in the right memory position of the previous node
                                 sl_Ready[id] = 1
-                                ic('Classical message from previous node OK') #TODO: REMOVE
                             else: #timeout in previous node
-                                ic('Classical message Timeout in left previous node') #REMOVE
                                 sl_Ready[id] = 0
                                 l_Ready[id] = 0
                                 #TODO: Check if current qubit in L mem position must be discarded
@@ -649,9 +639,7 @@ class SwapProtocol(NodeProtocol):
                             if m[0] == 'OK':
                                 #If message is OK, then we have a qubit in the left memory position of the next node
                                 sr_Ready[id] = 1
-                                ic('Classical message from next node OK') #TODO: REMOVE
                             else: #timeout in previous node
-                                ic('Classical message Timeout in next node') #REMOVE
                                 sr_Ready[id] = 0
                                 r_Ready[id] = 0
                                 #TODO: Check if current qubit in R mem position must be discarded
