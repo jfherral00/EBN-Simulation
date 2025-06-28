@@ -116,9 +116,11 @@ class RouteProtocol(LocalProtocol):
             self._total_delay += max_swap_time + correction_time 
     
             #When several requests are processed, we should also add time related to Bell measurements for those requests
-            if phase == 'application':
-                #Add 3% as margin for possible delays
-                self._total_delay += (len(networkmanager.get_paths()) -1) * (gate_duration + gate_duration_CX + measurements_duration) *1.03
+            #Operations will be queued, increasing the total time needed
+            if phase == 'application':#Add additional time to timer depending on the number of requests
+                add_timer = 1 + (len(networkmanager.get_paths())-1) * 0.03
+                #Add margin for possible delays. Switch scheduler adds time
+                self._total_delay += (len(networkmanager.get_paths()) -1) * (gate_duration + gate_duration_CX + measurements_duration) * add_timer
 
             # preparation of entanglement swaping from second to the last-1
             for nodepos in range(1,len(path['nodes'])-1):
@@ -134,7 +136,7 @@ class RouteProtocol(LocalProtocol):
 
         else: #loss_strategy is 'link'
             self._epr_requested_signals = {}#Dictionary that will store the signals to send to the different SwapProtocols for EPR regeneration
-            #self._total_delay=10000000 #TODO: Borrar cuando estén las pérdidas en enlace
+            
             for nodepos in range(len(path['nodes'])):
                 node = path['nodes'][nodepos]
                 previous_node_name = path['nodes'][nodepos-1] if nodepos > 0 else None
@@ -177,19 +179,10 @@ class RouteProtocol(LocalProtocol):
                     r_timeout = None
                     right_qsource = None
                 
-                #TODO: DELETE ONCE TESTED
-                '''
-                link_epr_requested_label = 'LINK_EPR_REQUESTED'+f"SwapProtocol_{node}_{path['request']}_1"
-                self._epr_requested_signals[f"SwapProtocol_{node}_{path['request']}_1"] = link_epr_requested_label
-                self.add_signal(self._epr_requested_signals[f"SwapProtocol_{node}_{path['request']}_1"])
-                link_restart_expr = self.await_signal(self,link_epr_requested_label)
-                '''
                 link_restart_expr = self.await_signal(self,self._link_epr_requested)
                 subprotocol = SwapProtocol(node=networkmanager.network.get_node(node), mem_left=mem_pos_left, mem_right=mem_pos_right, name=f"SwapProtocol_{node}_{path['request']}_1", request = path['request'], loss_strategy='link', l_timeout=l_timeout, r_timeout=r_timeout, previous_node=previous_node_name, next_node=next_node_name, link_restart_expr=link_restart_expr, left_qsource=left_qsource, right_qsource=right_qsource)
                 self.add_subprotocol(subprotocol)
                 
-        #for connection in self._networkmanager.network.connections:  #TODO: REMOVE
-        #    ic(connection)      #TODO: REMOVE
 
         # preparation of correct protocol in final node
         epr_state =  self._networkmanager.get_config('epr_pair','epr_pair')
@@ -350,10 +343,6 @@ class RouteProtocol(LocalProtocol):
                     if self._loss_strategy == 'link':
                         #Signal all SwapProtocols index #1 that an EPR is requested
                         self.send_signal(self._link_epr_requested, ['1'])
-                        #TODO: DELETE ONCE tested
-                        #for swapproto in self.subprotocols.values():
-                        #    if isinstance(swapproto, SwapProtocol) and swapproto._index == '1':
-                        #        self.send_signal(self._epr_requested_signals[swapproto.name], ['1'])
 
                     if self._loss_strategy == 'e2e': 
                         #Only scheduled when recovery loss strategy is E2E, otherwise losses are recovered by SwapProtocol
@@ -387,12 +376,7 @@ class RouteProtocol(LocalProtocol):
                                 self.signal_sources(index=[1,2])
                                 if self._loss_strategy == 'link':
                                     #Signal all SwapProtocols that an EPR is requested
-                                    #TODO: DELETE ONCE tested
                                     self.send_signal(self._link_epr_requested, ['1','2'])
-                                    #for swapproto in self.subprotocols.values():
-                                    #    if isinstance(swapproto, SwapProtocol):
-                                    #        self.send_signal(self._epr_requested_signals[swapproto.name], [swapproto._index])
-
 
                                 evexpr_protocol = (self.await_port_input(self._portleft_1) & \
                                     self.await_signal(self.subprotocols[f"CorrectProtocol_{self._path['request']}_1"], Signals.SUCCESS) &\
@@ -408,12 +392,7 @@ class RouteProtocol(LocalProtocol):
                                 self.signal_sources(index=[2])
                                 if self._loss_strategy == 'link':
                                     #Signal all SwapProtocols index #2 that an EPR is requested
-                                    #TODO: DELETE ONCE tested
                                     self.send_signal(self._link_epr_requested, ['2'])
-                                    #for swapproto in self.subprotocols.values():
-                                    #    if isinstance(swapproto, SwapProtocol) and swapproto._index == '2':
-                                    #        self.send_signal(self._epr_requested_signals[swapproto.name], ['2'])
-
 
                                 #Wait for qubits in both links and corrections in both
                                 evexpr_protocol = (self.await_port_input(self._portleft_2) & \
@@ -518,8 +497,6 @@ class SwapProtocol(NodeProtocol):
         
         #Signal to be used when loss strategy is 'link'.
         # Will be used by RouteProtocol to signal the different SwapProtocols that an EPR is requested
-        #TODO: REMOVE ONCE TESTED
-        #self._link_epr_requested = 'LINK_EPR_REQUESTED'+self.name
         self._link_epr_requested = 'LINK_EPR_REQUESTED'
         self.add_signal(self._link_epr_requested)
         
@@ -548,12 +525,6 @@ class SwapProtocol(NodeProtocol):
                 max_duration = inst.duration
         timer_duration = max_duration*0.1 if max_duration > 1000 else 100
 
-        #Initiate loss timers for the first time if loss_strategy is 'link'
-        #TODO: REMOVE this block
-        #if self._loss_strategy == 'link':
-        #    l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) if self._l_timeout is not None else None
-        #    r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) if self._r_timeout is not None else None
-
         #Dictionaries that will store result of link entanglements when 'link' loss_strategy is selected
         l_Ready = {} 
         r_Ready = {}
@@ -564,16 +535,16 @@ class SwapProtocol(NodeProtocol):
         
         while True:
             measurement_ready = False
-            end_node = False #TODO: Este booleano se podrá quitar
+
             if self._loss_strategy == 'e2e':                    
                 yield (self.await_port_input(self._qmem_input_port_l) &
                        self.await_port_input(self._qmem_input_port_r))
                 measurement_ready = True
             else:
                 #Build event expression
-                # Además, debe comprobar que el índice enviado en la señal es el suyo
+                #Signal received from the RouteProtocol to start EPR generation
                 evexpr_loss = self._link_restart_expr
-                #TODO: Procesar la señal para iniciar los timers de los enlaces
+
                 # On the left port it will wait for a qubit to be stored in the memory, or timeout while
                 # waiting for the qubit (loss) or a classical signal is received from the previous node
                 if self._qmem_input_port_l is not None:
@@ -649,8 +620,6 @@ class SwapProtocol(NodeProtocol):
                         l_Ready[idl] = 0
                         self.node.ports[f"ccon_L_{self.node.name}_{self._previous_node}_loss_{self._request}_{self._index}"].tx_output(Message(['NOT_OK',idl]))
                         #Ask source for new EPR 
-                        #idl += 1 #link entanglement is regenerated
-                        #l_Ready[idl] = 0
                         #Signal source in left link and restart timers
                         self._left_qsource.trigger() #if self._left_qsource is not None else None
                         l_timerevent = self._schedule_after(self._l_timeout, l_evtypetimer) #if (self._l_timeout is not None and self._l_timeout > 0) else None
@@ -660,17 +629,22 @@ class SwapProtocol(NodeProtocol):
                         r_Ready[idr] = 0
                         self.node.ports[f"ccon_R_{self.node.name}_{self._next_node}_loss_{self._request}_{self._index}"].tx_output(Message(['NOT_OK',idr]))
                         #Ask source for new EPR 
-                        #idr += 1 #link entanglement is regenerated
-                        #l_Ready[idr] = 0
                         #Signal source in right link and restart timers
                         self._right_qsource.trigger() #if self._right_qsource is not None else None
                         r_timerevent = self._schedule_after(self._r_timeout, r_evtypetimer) #if (self._r_timeout is not None and self._r_timeout > 0) else None
        
                 if (idl in l_Ready.keys() and l_Ready[idl] == 1) and (idr in r_Ready.keys() and r_Ready[idr] == 1) and (idl in sl_Ready.keys() and sl_Ready[idl] == 1) and (idr in sr_Ready.keys() and sr_Ready[idr] == 1):
                     measurement_ready = True
-                    #TODO: Check end nodes, only one _Ready is available
+                    if self._loss_strategy == 'link':
+                        #Initialize loss signaling semaphores
+                        l_Ready = {} 
+                        sl_Ready = {}
+                        idl = None #Will identify the generated EPR when loss_strategy is selected
+                        r_Ready = {}
+                        sr_Ready = {}
+                        idr = None
             
-            if measurement_ready and not end_node: #Switch has qubits ready in the 2 memory positions
+            if measurement_ready: #Switch has qubits ready in the 2 memory positions
                 #Add to node queue
                 self.node.add_request(self.name)
         

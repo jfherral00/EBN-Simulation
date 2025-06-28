@@ -171,7 +171,6 @@ class NetworkManager():
         self._create_network()
         self._measure_link_fidelity()
         self._calculate_paths()
-        ic('Network created')
 
     def get_info_report(self):
         '''
