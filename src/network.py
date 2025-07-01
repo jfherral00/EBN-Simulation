@@ -554,11 +554,12 @@ class NetworkManager():
                 conn = self.network.get_connection(nodeA, nodeB,f"cconn_{nodeA.name}_{nodeB.name}_{path['request']}_{i}")
                 self.network.remove_connection(conn)
                 
-                conn = self.network.get_connection(nodeA, nodeB,f"cconn_{nodeA.name}_{nodeB.name}_loss_{path['request']}_{i}")
-                self.network.remove_connection(conn)
-                
-                conn = self.network.get_connection(nodeB, nodeA,f"cconn_{nodeB.name}_{nodeA.name}_loss_{path['request']}_{i}")
-                self.network.remove_connection(conn)
+                if self.get_config('loss_strategy','loss_strategy') == 'link':
+                    conn = self.network.get_connection(nodeA, nodeB,f"cconn_{nodeA.name}_{nodeB.name}_loss_{path['request']}_{i}")
+                    self.network.remove_connection(conn)
+                    
+                    conn = self.network.get_connection(nodeB, nodeA,f"cconn_{nodeB.name}_{nodeA.name}_loss_{path['request']}_{i}")
+                    self.network.remove_connection(conn)
                 #Unable to delete ports. Will remain unconnected
 
         #remove classical purification connection
