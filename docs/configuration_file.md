@@ -15,6 +15,7 @@ Global
 - *path_fidel_rounds*: number of simulations that will be performed by the hypervisor in order to estimate end to end fidelity
 - *epr_par*: EPR that the quantum sources will generate. Allowed values: PHI_PLUS or PSI_PLUS
 - *simulation_duration*: duration in nanoseconds of the application simulation phase
+- *loss_strategy*: determines how qubit losses are managed by the network. A value of 'e2e' implies that when a qubit is lost, all link level EPRs are restarted. When the value 'link' is indicated, the link level entanglement will be regenerated only in the link where the qubit has been lost.
 
 Nodes
 ------
