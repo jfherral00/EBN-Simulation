@@ -650,14 +650,13 @@ class SwapProtocol(NodeProtocol):
         
                 #More than two requests can arrive at the same time to qprocessor
                 not_serviced = True
+                
+                #In case processor is busy, wait
+                if self.node.qmemory.busy:
+                    yield self.await_program(self.node.qmemory)
+                        
                 while not_serviced:
-                    
                     if self.name == self.node.get_request('first'): #First in queue, can be serviced   
-
-                        #Check for future removal. We manage qprocessor with FIFO queue
-                        # Perform Bell measurement
-                        #if self.node.qmemory.busy:
-                        #    yield self.await_program(self.node.qmemory)
 
                         yield self.node.qmemory.execute_program(self._program, qubit_mapping=[self._mem_right, self._mem_left])
                         #Serviced, remove from queue
