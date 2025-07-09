@@ -149,11 +149,13 @@ class RouteProtocol(LocalProtocol):
                     #if source is in this switch, then distance is 0; otherwise is the distance
                     link_left_distance = networkmanager.get_config('links',link_left.split('-')[0],'distance')
                     link_left_distance = 0 if path['comms'][nodepos-1]['source'] == node else float(link_left_distance)
-                    source_delay_left = networkmanager.get_config('links',link_left.split('-')[0],'source_delay')
                     
+                    source_delay_left = float(networkmanager.get_config('links',link_left.split('-')[0],'source_delay')) \
+                        if networkmanager.get_config('links',link_left.split('-')[0],'source_delay') != 'NOT_FOUND' else 0
+ 
                     #Get photon speed in each of the links. With the speed calculate timeout
                     photon_speed_left = float(networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
-                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) + int(source_delay_left) + 100 #100 ns margin to avoid false timeouts
+                    l_timeout = float(1e9 * link_left_distance / photon_speed_left) + source_delay_left + 100 #100 ns margin to avoid false timeouts
                     
                     left_qsource_node = networkmanager.network.get_node(path['comms'][nodepos-1]['source'])
                     left_qsource = left_qsource_node.subcomponents[f"qsource_{left_qsource_node.name}_{link_left.split('-')[0]}_{link_left.split('-')[1]}"]
@@ -167,9 +169,12 @@ class RouteProtocol(LocalProtocol):
                     mem_pos_right = networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
                     link_right_distance = networkmanager.get_config('links',link_right.split('-')[0],'distance')
                     link_right_distance = 0 if path['comms'][nodepos]['source'] == node else float(link_right_distance)
-                    source_delay_right = networkmanager.get_config('links',link_right.split('-')[0],'source_delay')
+                    
+                    source_delay_right = float(networkmanager.get_config('links',link_right.split('-')[0],'source_delay')) \
+                        if networkmanager.get_config('links',link_right.split('-')[0],'source_delay') != 'NOT_FOUND' else 0
+                    
                     photon_speed_right = float(networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
-                    r_timeout = int(1e9 * link_right_distance / photon_speed_right) + int(source_delay_right) + 100 #100 ns margin to avoid false timeouts
+                    r_timeout = float(1e9 * link_right_distance / photon_speed_right) + source_delay_right + 100 #100 ns margin to avoid false timeouts
                     
                     right_qsource_node = networkmanager.network.get_node(path['comms'][nodepos]['source'])
                     right_qsource = right_qsource_node.subcomponents[f"qsource_{right_qsource_node.name}_{link_right.split('-')[0]}_{link_right.split('-')[1]}"]
@@ -264,11 +269,13 @@ class RouteProtocol(LocalProtocol):
                     #if source is in this switch, then distance is 0; otherwise is the distance
                     link_left_distance = self._networkmanager.get_config('links',link_left.split('-')[0],'distance')
                     link_left_distance = 0 if self._path['comms'][nodepos-1]['source'] == node else float(link_left_distance)
-                    source_delay_left = self._networkmanager.get_config('links',link_left.split('-')[0],'source_delay')
+                    
+                    source_delay_left = float(self._networkmanager.get_config('links',link_left.split('-')[0],'source_delay')) \
+                        if self._networkmanager.get_config('links',link_left.split('-')[0],'source_delay') != 'NOT_FOUND' else 0
                     
                     #Get photon speed in each of the links. With the speed calculate timeout
                     photon_speed_left = float(self._networkmanager.get_config('links',link_left.split('-')[0],'photon_speed_fibre'))
-                    l_timeout = int(1e9 * link_left_distance / photon_speed_left) + int(source_delay_left) + 100 #100 ns margin to avoid false timeouts
+                    l_timeout = float(1e9 * link_left_distance / photon_speed_left) + source_delay_left + 100 #100 ns margin to avoid false timeouts
                     
                     left_qsource_node = self._networkmanager.network.get_node(self._path['comms'][nodepos-1]['source'])
                     left_qsource = left_qsource_node.subcomponents[f"qsource_{left_qsource_node.name}_{link_left.split('-')[0]}_{link_left.split('-')[1]}"]
@@ -282,9 +289,10 @@ class RouteProtocol(LocalProtocol):
                     mem_pos_right = self._networkmanager.get_mem_position(node,link_right.split('-')[0],link_right.split('-')[1])
                     link_right_distance = self._networkmanager.get_config('links',link_right.split('-')[0],'distance')
                     link_right_distance = 0 if self._path['comms'][nodepos]['source'] == node else float(link_right_distance)
-                    source_delay_right = self._networkmanager.get_config('links',link_right.split('-')[0],'source_delay')
+                    source_delay_right = float(self._networkmanager.get_config('links',link_right.split('-')[0],'source_delay')) \
+                        if self._networkmanager.get_config('links',link_right.split('-')[0],'source_delay') != 'NOT_FOUND' else 0
                     photon_speed_right = float(self._networkmanager.get_config('links',link_right.split('-')[0],'photon_speed_fibre'))
-                    r_timeout = int(1e9 * link_right_distance / photon_speed_right) + int(source_delay_right) + 100 #100 ns margin to avoid false timeouts
+                    r_timeout = float(1e9 * link_right_distance / photon_speed_right) + source_delay_right + 100 #100 ns margin to avoid false timeouts
                     right_qsource_node = self._networkmanager.network.get_node(self._path['comms'][nodepos]['source'])
                     right_qsource = right_qsource_node.subcomponents[f"qsource_{right_qsource_node.name}_{link_right.split('-')[0]}_{link_right.split('-')[1]}"]
                 else:
